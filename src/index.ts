@@ -3,6 +3,7 @@ import { Events } from "discord.js";
 import { client } from "./client.js";
 import { config } from "./config/config.js";
 import { loadCommands } from "./handlers/CommandHandler.js";
+import "./handlers/ButtonHandler.js";
 
 const commands = await loadCommands();
 

@@ -16,3 +16,21 @@ export const buttonRoles = sqliteTable("button_roles", {
   roleId: text("role_id").notNull(),
   createdAt: integer("created_at").notNull()
 });
+
+export const verifiedPlayers = sqliteTable("verified_players", {
+  discordId: text("discord_id").primaryKey(),
+
+  minecraftUuid: text("minecraft_uuid").notNull(),
+
+  minecraftUsername: text("minecraft_username").notNull(),
+
+  platform: text("platform").notNull(),
+
+  verificationCode: text("verification_code"),
+
+  verified: integer("verified").default(0),
+
+  verifiedAt: integer("verified_at"),
+
+  createdAt: integer("created_at").notNull()
+});

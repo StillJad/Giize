@@ -20,6 +20,17 @@ CREATE TABLE IF NOT EXISTS button_roles (
   role_id TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS verified_players (
+  discord_id TEXT PRIMARY KEY,
+  minecraft_uuid TEXT NOT NULL,
+  minecraft_username TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  verification_code TEXT,
+  verified INTEGER DEFAULT 0,
+  verified_at INTEGER,
+  created_at INTEGER NOT NULL
+);
 `);
 
 export const db = drizzle(sqlite);

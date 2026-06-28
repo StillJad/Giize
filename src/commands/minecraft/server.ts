@@ -5,7 +5,7 @@ import { config } from "../../config/config.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
-    .setName("ip")
+    .setName("server")
     .setDescription("Shows the Giize Events Minecraft server IP."),
   async execute(interaction) {
     const embed = giizeEmbed()
