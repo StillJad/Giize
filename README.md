@@ -21,6 +21,28 @@ npm run deploy
 npm run dev
 ```
 
+## Docker Deployment
+
+Build and start the production container:
+
+```bash
+docker compose up -d --build
+```
+
+Follow logs:
+
+```bash
+docker compose logs -f
+```
+
+Stop the bot:
+
+```bash
+docker compose down
+```
+
+The SQLite database is stored in `./data` on the host and mounted to `/app/data` in the container.
+
 ## Required Intents
 
 Enable these in the Discord Developer Portal and keep them in the bot client:
