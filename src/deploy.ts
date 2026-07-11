@@ -2,6 +2,7 @@ import "dotenv/config";
 import { REST, Routes } from "discord.js";
 import { config } from "./config/config.js";
 import { loadCommands } from "./handlers/CommandHandler.js";
+import { logger } from "./utils/logger.js";
 
 const commands = await loadCommands();
 
@@ -12,4 +13,4 @@ await rest.put(
   { body: commands.map(command => command.data.toJSON()) }
 );
 
-console.log(`✅ Deployed ${commands.size} slash commands`);
+logger.info(`✓ Deployed ${commands.size} slash commands`);

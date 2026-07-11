@@ -9,28 +9,24 @@ import { giizeEmbed } from "../../utils/embeds.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("setup")
-    .setDescription("Setup Giize Bot")
+    .setDescription("View Giize Bot setup guidance.")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
 
   async execute(interaction) {
     const embed = giizeEmbed()
       .setTitle("⚙️ Giize Setup")
       .setDescription(
-`This wizard is not finished yet.
+`Use these commands to configure Giize Bot:
 
-Upcoming:
-
-• Welcome
-• Tickets
-• Roles
-• Verification
-• Minecraft
-• Logs`
+• /welcome setup
+• /verification setup
+• /server
+• /status`
       );
 
     await interaction.reply({
       embeds: [embed],
-      ephemeral: true
+      flags: 64
     });
   }
 };

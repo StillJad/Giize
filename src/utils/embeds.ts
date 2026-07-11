@@ -1,6 +1,11 @@
 import { EmbedBuilder } from "discord.js";
 import { Colors } from "../config/colors.js";
 
+export const giizeFooter = "Giize Bot";
+
 export function giizeEmbed() {
-  return new EmbedBuilder().setColor(Colors.giize).setTimestamp();
+  return new EmbedBuilder()
+    .setColor(Colors.giize)
+    .setFooter({ text: giizeFooter })
+    .setTimestamp();
 }

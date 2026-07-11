@@ -15,14 +15,14 @@ export const command: Command = {
     .setDescription("Verify your Minecraft account.")
     .addStringOption(option =>
       option
-        .setName("username")
-        .setDescription("Minecraft Username")
+        .setName("minecraft_username")
+        .setDescription("Your Minecraft username (Java or Bedrock)")
         .setRequired(true)
     )
     .addStringOption(option =>
       option
         .setName("platform")
-        .setDescription("Java or Bedrock")
+        .setDescription("Platform")
         .addChoices(
           { name: "Java", value: "java" },
           { name: "Bedrock", value: "bedrock" }
@@ -31,12 +31,13 @@ export const command: Command = {
     ),
 
   async execute(interaction) {
-    const username = interaction.options.getString("username", true);
+    const username = interaction.options.getString("minecraft_username", true);
 
     const platform = interaction.options.getString(
       "platform",
       true
-    ) as "Java" | "Bedrock";
+    ) as "java" | "bedrock";
+    const platformLabel = platform === "java" ? "Java" : "Bedrock";
 
     const normalized = VerificationService.normalizeUsername(
       username,
@@ -44,21 +45,19 @@ export const command: Command = {
     );
 
     const embed = giizeEmbed()
-      .setTitle("🔐 Confirm Verification")
-      .setDescription(
-`**Username**
-${normalized}
-
-**Platform**
-${platform}
-
-Is this information correct?`
-      );
+      .setTitle("Verify Minecraft Account")
+      .setDescription("Please confirm that this is your Minecraft account before continuing.")
+      .addFields(
+        { name: "Minecraft Username", value: normalized, inline: true },
+        { name: "Platform", value: platformLabel, inline: true },
+        { name: "Nickname After Verification", value: normalized, inline: false }
+      )
+      .setFooter({ text: "Giize Events Verification System" });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`verify_yes:${normalized}`)
-        .setLabel("Confirm")
+        .setCustomId(`verify_yes:${platform}:${normalized}`)
+        .setLabel("Confirm Verification")
         .setEmoji("✅")
         .setStyle(ButtonStyle.Success),
 

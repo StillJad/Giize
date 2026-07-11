@@ -1,0 +1,580 @@
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  ChannelType,
+  ModalBuilder,
+  PermissionFlagsBits,
+  TextInputBuilder,
+  TextInputStyle,
+  GuildMember,
+  type ButtonInteraction,
+  type ChatInputCommandInteraction,
+  type Guild,
+  type ModalSubmitInteraction,
+  type TextChannel,
+  type User,
+} from "discord.js";
+import { config } from "../../config/config.js";
+import { sqlite } from "../../database/database.js";
+import { logger } from "../../utils/logger.js";
+import { safeEdit, safeReply } from "./interactionResponses.js";
+import { ticketRenderer, type TicketType } from "./TicketRenderer.js";
+import { transcriptService } from "./TranscriptService.js";
+
+type ActiveTicket = {
+  ticketNumber: string;
+  creatorId: string;
+  creatorTag: string;
+  type: TicketType;
+  reason: string;
+  openedAt: Date;
+};
+
+const noReasonProvided = "No reason provided.";
+
+export class TicketService {
+  private readonly activeTickets = new Map<string, ActiveTicket>();
+  private readonly openingTickets = new Set<string>();
+
+  async open(interaction: ChatInputCommandInteraction, type: TicketType, reason: string) {
+    await interaction.deferReply({ flags: 64 });
+
+    if (!interaction.inGuild() || !interaction.guild) {
+      await safeEdit(interaction, { content: "❌ Tickets can only be opened in a server." });
+      return;
+    }
+
+    const guild = interaction.guild;
+    const userId = interaction.user.id;
+
+    if (this.hasOpenTicket(guild, userId)) {
+      await safeEdit(interaction, { content: "You already have an open ticket." });
+      return;
+    }
+
+    if (this.openingTickets.has(userId)) {
+      await safeEdit(interaction, { content: "You already have a ticket opening." });
+      return;
+    }
+
+    this.openingTickets.add(userId);
+
+    try {
+      const botMember = guild.members.me ?? (await guild.members.fetchMe());
+      const channelName = this.nextTicketChannelName(guild, interaction.user.username);
+      const openedAt = new Date();
+      const ticketNumber = this.claimNextTicketNumber();
+
+      const permissionOverwrites = [
+        {
+          id: guild.roles.everyone.id,
+          deny: [PermissionFlagsBits.ViewChannel],
+        },
+        {
+          id: userId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+          ],
+        },
+        {
+          id: botMember.id,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.EmbedLinks,
+          ],
+        },
+        {
+          id: config.staffRoleId,
+          allow: [
+            PermissionFlagsBits.ViewChannel,
+            PermissionFlagsBits.SendMessages,
+            PermissionFlagsBits.ReadMessageHistory,
+            PermissionFlagsBits.AttachFiles,
+            PermissionFlagsBits.EmbedLinks,
+          ],
+        },
+      ];
+
+      const ticketCategory = guild.channels.cache.get(config.ticketCategoryId);
+
+      if (!ticketCategory || ticketCategory.type !== ChannelType.GuildCategory) {
+        logger.warn(`Ticket category ${config.ticketCategoryId} was not found or is not a category. Creating ticket without a parent.`);
+      }
+
+      const ticketChannel = await guild.channels.create({
+        name: channelName,
+        type: ChannelType.GuildText,
+        parent: ticketCategory?.type === ChannelType.GuildCategory ? ticketCategory.id : undefined,
+        topic: [
+          `Ticket ${ticketNumber}`,
+          `Creator ID: ${userId}`,
+          `Ticket Type: ${type}`,
+          `Opening Timestamp: ${openedAt.toISOString()}`,
+        ].join(" | "),
+        permissionOverwrites,
+        reason: `Ticket opened by ${interaction.user.tag}`,
+      });
+
+      this.activeTickets.set(ticketChannel.id, {
+        ticketNumber,
+        creatorId: userId,
+        creatorTag: interaction.user.tag,
+        type,
+        reason,
+        openedAt,
+      });
+
+      await ticketChannel.send({
+        content: `${interaction.user} <@&${config.staffRoleId}>`,
+        embeds: [
+          ticketRenderer.renderWelcomeEmbed({
+            ticketNumber,
+            openedBy: interaction.user,
+            type,
+            reason,
+            openedAt,
+          }),
+        ],
+        components: [this.closeTicketRow()],
+      });
+
+      await safeEdit(interaction, { content: `✅ Ticket created: ${ticketChannel}` });
+    } finally {
+      this.openingTickets.delete(userId);
+    }
+  }
+
+  async closeFromCommand(interaction: ChatInputCommandInteraction, reason: string) {
+    await interaction.deferReply({ flags: 64 });
+    if (!this.isStaff(interaction.member)) {
+      await safeEdit(interaction, { content: "❌ Only staff can use this command." });
+      return;
+    }
+    await this.close(interaction, reason);
+  }
+
+  async addUser(interaction: ChatInputCommandInteraction, user: User) {
+    await interaction.deferReply({ flags: 64 });
+    if (!this.isStaff(interaction.member)) {
+      await safeEdit(interaction, { content: "❌ Only staff can use this command." });
+      return;
+    }
+    const channel = this.currentTicketChannel(interaction);
+
+    if (!channel) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
+    await channel.permissionOverwrites.edit(user.id, {
+      ViewChannel: true,
+      SendMessages: true,
+      ReadMessageHistory: true,
+    });
+    await safeEdit(interaction, { content: `✅ Added ${user} to this ticket.` });
+  }
+
+  async removeUser(interaction: ChatInputCommandInteraction, user: User) {
+    await interaction.deferReply({ flags: 64 });
+    if (!this.isStaff(interaction.member)) {
+      await safeEdit(interaction, { content: "❌ Only staff can use this command." });
+      return;
+    }
+    const channel = this.currentTicketChannel(interaction);
+
+    if (!channel) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
+    await channel.permissionOverwrites.edit(user.id, {
+      ViewChannel: false,
+      SendMessages: false,
+      ReadMessageHistory: false,
+    });
+    await safeEdit(interaction, { content: `✅ Removed ${user} from this ticket.` });
+  }
+
+  async rename(interaction: ChatInputCommandInteraction, name: string) {
+    await interaction.deferReply({ flags: 64 });
+    if (!this.isStaff(interaction.member)) {
+      await safeEdit(interaction, { content: "❌ Only staff can use this command." });
+      return;
+    }
+    const channel = this.currentTicketChannel(interaction);
+
+    if (!channel) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
+    const newName = `ticket-${this.slug(name)}`.slice(0, 100);
+    await channel.setName(newName, `Ticket renamed by ${interaction.user.tag}`);
+    await safeEdit(interaction, { content: `✅ Renamed this ticket to ${channel}.` });
+  }
+
+  async requestClose(interaction: ButtonInteraction) {
+    await this.closeFromButton(interaction, noReasonProvided);
+  }
+
+  async requestCloseReason(interaction: ButtonInteraction) {
+    if (!this.activeTickets.has(interaction.channelId)) {
+      await safeReply(interaction, { content: "❌ This is not an active ticket.", flags: 64 });
+      return;
+    }
+
+    await interaction.showModal(this.closeReasonModal());
+  }
+
+  async closeFromButton(interaction: ButtonInteraction, reason: string) {
+    await interaction.deferReply({ flags: 64 });
+    await this.close(interaction, reason);
+  }
+
+  async submitCloseReason(interaction: ModalSubmitInteraction) {
+    await interaction.deferReply({ flags: 64 });
+
+    if (!interaction.channelId) {
+      await safeEdit(interaction, { content: "❌ This is not an active ticket." });
+      return;
+    }
+
+    await this.close(interaction, interaction.fields.getTextInputValue("closeReason"));
+  }
+
+  private async close(
+    interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction,
+    closingReasonInput: string
+  ) {
+    if (!interaction.inGuild() || !interaction.guild || !interaction.channel?.isTextBased()) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
+    const channelId = interaction.channelId;
+
+    if (!channelId) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
+    const ticket = this.activeTickets.get(channelId);
+
+    if (!ticket || !("name" in interaction.channel)) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
+    const channel = interaction.channel as TextChannel;
+    const closingReason = closingReasonInput.trim() || noReasonProvided;
+    const closedAt = new Date();
+    const duration = this.formatDuration(closedAt.getTime() - ticket.openedAt.getTime());
+    const transcriptMetadata = {
+      serverName: interaction.guild.name,
+      ticketNumber: ticket.ticketNumber,
+      ticketChannel: channel.name,
+      ticketChannelId: channel.id,
+      ticketCreator: ticket.creatorTag,
+      ticketCreatorId: ticket.creatorId,
+      type: ticket.type,
+      openedAt: ticket.openedAt,
+      closedAt,
+      duration,
+      closedBy: interaction.user.tag,
+      closedById: interaction.user.id,
+      openingReason: ticket.reason,
+      closingReason,
+    };
+    const log = {
+      ticketNumber: ticket.ticketNumber,
+      ticketChannel: `${channel.name} (${channel.id})`,
+      openedBy: `<@${ticket.creatorId}>`,
+      creatorId: ticket.creatorId,
+      closedBy: interaction.user,
+      type: ticket.type,
+      openingReason: ticket.reason,
+      closingReason,
+      openedAt: ticket.openedAt,
+      closedAt,
+      duration,
+    };
+    let transcriptHtml = this.fallbackTranscriptHtml(transcriptMetadata);
+
+    try {
+      transcriptHtml = await transcriptService.createHtml(channel, transcriptMetadata);
+    } catch (error) {
+      logger.warn("Failed to generate ticket transcript. Continuing close flow.", error);
+    }
+
+    let transcriptArchive:
+      | {
+          directory: string;
+          htmlPath: string;
+          zipPath: string;
+          zipFilename: string;
+        }
+      | undefined;
+
+    try {
+      transcriptArchive = await transcriptService.createTempArchive(transcriptHtml, ticket.ticketNumber);
+    } catch (error) {
+      logger.warn("Failed to save ticket transcript archive. Continuing close flow.", error);
+    }
+
+    await this.sendTicketLog(interaction.guild, log, transcriptArchive);
+    await this.sendCreatorDm(interaction, ticket.creatorId, log, transcriptArchive);
+
+    if (transcriptArchive) {
+      await transcriptService.removeTempArchive(transcriptArchive);
+    }
+
+    this.activeTickets.delete(channel.id);
+
+    await safeEdit(interaction, { content: "✅ Ticket closed." }).catch(error => {
+      logger.warn("Failed to acknowledge ticket close. Continuing close flow.", error);
+    });
+
+    await this.countdownAndDelete(channel);
+  }
+
+  private closeTicketRow() {
+    return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder()
+        .setCustomId("ticket_close")
+        .setLabel("Close")
+        .setEmoji("🔒")
+        .setStyle(ButtonStyle.Danger),
+      new ButtonBuilder()
+        .setCustomId("ticket_close_reason")
+        .setLabel("Close With Reason")
+        .setEmoji("📝")
+        .setStyle(ButtonStyle.Secondary)
+    );
+  }
+
+  private closeReasonModal() {
+    return new ModalBuilder()
+      .setCustomId("ticket_close_reason")
+      .setTitle("Close Ticket")
+      .addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(
+          new TextInputBuilder()
+            .setCustomId("closeReason")
+            .setLabel("Reason")
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true)
+            .setMaxLength(1000)
+        )
+      );
+  }
+
+  private currentTicketChannel(interaction: ChatInputCommandInteraction) {
+    if (!interaction.channel || !("name" in interaction.channel)) return undefined;
+    if (!this.activeTickets.has(interaction.channel.id)) return undefined;
+    return interaction.channel as TextChannel;
+  }
+
+  private async sendTicketLog(
+    guild: Guild,
+    log: Parameters<typeof ticketRenderer.renderLogEmbed>[0],
+    transcriptArchive: { zipPath: string; zipFilename: string } | undefined
+  ) {
+    try {
+      const channel = await guild.channels.fetch(config.ticketLogsChannelId).catch(error => {
+        logger.warn("Failed to fetch ticket logs channel. Skipping logs.", error);
+        return null;
+      });
+
+      logger.warn(`Ticket logs channel found? ${Boolean(channel)}`);
+
+      if (!channel) {
+        logger.warn(`Ticket logs channel ${config.ticketLogsChannelId} was not found. Skipping logs.`);
+        return;
+      }
+
+      logger.warn(`Ticket logs channel name: ${"name" in channel ? channel.name : "unknown"}`);
+      logger.warn(`Ticket logs channel type: ${channel.type}`);
+
+      if (!channel.isTextBased() || !("send" in channel)) {
+        logger.warn(`Ticket logs channel ${config.ticketLogsChannelId} is not text based. Skipping logs.`);
+        return;
+      }
+
+      const botMember = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
+
+      if (!botMember) {
+        logger.warn("Could not resolve bot member. Skipping ticket logs.");
+        return;
+      }
+
+      const permissions = channel.permissionsFor(botMember);
+      const permissionChecks = [
+        ["View Channel", PermissionFlagsBits.ViewChannel],
+        ["Send Messages", PermissionFlagsBits.SendMessages],
+        ["Attach Files", PermissionFlagsBits.AttachFiles],
+        ["Embed Links", PermissionFlagsBits.EmbedLinks],
+      ] as const;
+
+      for (const [label, permission] of permissionChecks) {
+        logger.warn(`Ticket logs bot permission ${label}: ${Boolean(permissions?.has(permission))}`);
+      }
+
+      const missingPermissions = permissionChecks
+        .filter(([, permission]) => !permissions?.has(permission))
+        .map(([label]) => label);
+
+      if (missingPermissions.length > 0) {
+        for (const permission of missingPermissions) {
+          logger.warn(`Missing ticket logs permission: ${permission}`);
+        }
+        return;
+      }
+
+      if (!transcriptArchive) {
+        logger.warn("Transcript archive was not available. Skipping ticket logs.");
+        return;
+      }
+
+      await channel.send({
+        embeds: [ticketRenderer.renderLogEmbed(log)],
+        files: [transcriptService.createAttachment(transcriptArchive.zipPath, transcriptArchive.zipFilename)],
+      });
+    } catch (error) {
+      logger.warn("Failed to send ticket logs. Continuing close flow.", error);
+    }
+  }
+
+  private async sendCreatorDm(
+    interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction,
+    creatorId: string,
+    log: Parameters<typeof ticketRenderer.renderClosedDmEmbed>[0],
+    transcriptArchive: { zipPath: string; zipFilename: string } | undefined
+  ) {
+    try {
+      if (!transcriptArchive) {
+        logger.warn("Transcript archive was not available. Skipping ticket creator DM.");
+        return;
+      }
+
+      const creator = await interaction.client.users.fetch(creatorId);
+
+      await creator.send({
+        embeds: [ticketRenderer.renderClosedDmEmbed(log)],
+        files: [transcriptService.createAttachment(transcriptArchive.zipPath, transcriptArchive.zipFilename)],
+      });
+    } catch (error) {
+      logger.warn("Failed to DM ticket creator. Continuing close flow.", error);
+    }
+  }
+
+  private hasOpenTicket(guild: Guild, userId: string) {
+    return (
+      [...this.activeTickets.values()].some(ticket => ticket.creatorId === userId) ||
+      this.ticketChannels(guild).some(channel => Boolean(channel.topic?.includes(`Creator ID: ${userId}`)))
+    );
+  }
+
+  private ticketChannels(guild: Guild) {
+    const textChannels = guild.channels.cache.filter(channel => channel.type === ChannelType.GuildText);
+
+    if (!config.ticketCategoryId) {
+      return textChannels;
+    }
+
+    const categoryChannels = textChannels.filter(channel => channel.parentId === config.ticketCategoryId);
+    return categoryChannels.size > 0 ? categoryChannels : textChannels;
+  }
+
+  private claimNextTicketNumber() {
+    const claimNumber = sqlite.transaction(() => {
+      const row = sqlite
+        .prepare("SELECT next_ticket_number AS nextTicketNumber FROM ticket_counter WHERE id = 1")
+        .get() as { nextTicketNumber: number } | undefined;
+      const nextTicketNumber = row?.nextTicketNumber ?? 1;
+
+      sqlite
+        .prepare("INSERT OR REPLACE INTO ticket_counter (id, next_ticket_number) VALUES (1, ?)")
+        .run(nextTicketNumber + 1);
+
+      return nextTicketNumber;
+    });
+
+    return `#${String(claimNumber()).padStart(4, "0")}`;
+  }
+
+  private nextTicketChannelName(guild: Guild, username: string) {
+    const baseName = `ticket-${this.slug(username)}`.slice(0, 80) || "ticket-user";
+    let candidate = baseName;
+    let suffix = 2;
+
+    while (guild.channels.cache.some(channel => channel.name === candidate)) {
+      candidate = `${baseName}-${suffix}`;
+      suffix += 1;
+    }
+
+    return candidate;
+  }
+
+  private slug(value: string) {
+    return value
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "") || "user";
+  }
+
+  private formatDuration(milliseconds: number) {
+    const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+    const hours = Math.floor(totalSeconds / 3_600);
+    const minutes = Math.floor((totalSeconds % 3_600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return [
+      hours ? `${hours}h` : "",
+      minutes ? `${minutes}m` : "",
+      `${seconds}s`,
+    ].filter(Boolean).join(" ");
+  }
+
+  private isStaff(member: unknown) {
+    return member instanceof GuildMember && member.roles.cache.has(config.staffRoleId);
+  }
+
+  private async countdownAndDelete(channel: TextChannel) {
+    try {
+      const countdownMessage = await channel.send("🔒 Ticket closing in 5");
+
+      for (let seconds = 4; seconds >= 1; seconds -= 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        await countdownMessage.edit(`🔒 Ticket closing in ${seconds}`).catch(error => {
+          logger.warn("Failed to edit ticket close countdown. Continuing close flow.", error);
+        });
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      await countdownMessage.edit("Deleting…").catch(error => {
+        logger.warn("Failed to edit ticket close countdown. Continuing close flow.", error);
+      });
+    } catch (error) {
+      logger.warn("Failed to send ticket close countdown. Continuing close flow.", error);
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    await channel.delete("Ticket closed").catch(error => {
+      logger.warn("Failed to delete ticket channel.", error);
+    });
+  }
+
+  private fallbackTranscriptHtml(metadata: Parameters<typeof transcriptService.createHtml>[1]) {
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${metadata.ticketNumber}</title></head><body><h1>${metadata.ticketNumber}</h1><p>Transcript generation failed.</p></body></html>`;
+  }
+}
+
+export const ticketService = new TicketService();

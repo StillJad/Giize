@@ -11,11 +11,11 @@ export const command: Command = {
       .setTitle("Giize Bot Help")
       .setDescription("Your Minecraft event server assistant.")
       .addFields(
-        { name: "Minecraft", value: "`/ip` `/status`" },
+        { name: "Minecraft", value: "`/server` `/status`" },
         { name: "Utility", value: "`/help` `/ping`" },
-        { name: "Server", value: "`/welcome test` `/roles panel`" }
+        { name: "Server", value: "`/event` `/ticket` `/welcome preview`" }
       );
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: 64 });
   }
 };
