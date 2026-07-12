@@ -41,6 +41,7 @@ type EventRow = {
   end_timestamp: number;
   max_players: number | null;
   ping_role: string | null;
+  going_role: string | null;
   status: EventStatus;
   created_at: number;
 };
@@ -54,6 +55,7 @@ type EventCreateInput = {
   location: string | null;
   maxPlayers: number | null;
   pingRole: Role | null;
+  goingRole: Role | null;
   channel: TextChannel;
 };
 
@@ -67,6 +69,7 @@ type EventEditInput = {
   location: string | null;
   maxPlayers: number | null;
   pingRole: Role | null;
+  goingRole: Role | null;
 };
 
 type ParticipantExportFile = {
@@ -103,9 +106,9 @@ export class EventService {
     const insert = sqlite.prepare(`
       INSERT INTO events (
         event_number, guild_id, message_id, channel_id, host_id, title, description, location,
-        start_timestamp, end_timestamp, max_players, ping_role, status, created_at
+        start_timestamp, end_timestamp, max_players, ping_role, going_role, status, created_at
       )
-      VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)
+      VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)
     `).run(
       eventNumber,
       interaction.guild.id,
@@ -118,6 +121,7 @@ export class EventService {
       parsedTime.endTimestamp,
       input.maxPlayers,
       input.pingRole?.id ?? null,
+      input.goingRole?.id ?? null,
       now
     );
 
@@ -185,7 +189,7 @@ export class EventService {
     sqlite.prepare(`
       UPDATE events
       SET title = ?, description = ?, location = ?, start_timestamp = ?, end_timestamp = ?,
-          max_players = ?, ping_role = ?
+          max_players = ?, ping_role = ?, going_role = ?
       WHERE id = ?
     `).run(
       input.title ?? event.title,
@@ -195,6 +199,7 @@ export class EventService {
       parsedTime.endTimestamp,
       input.maxPlayers ?? event.maxPlayers,
       input.pingRole?.id ?? event.pingRole,
+      input.goingRole?.id ?? event.goingRole,
       event.id
     );
 
@@ -218,8 +223,10 @@ export class EventService {
       return;
     }
 
+    await this.removeGoingRoleFromAssignedMembers(interaction.guild, event);
     await this.deleteEventMessage(interaction.client, event);
     sqlite.prepare("DELETE FROM event_participants WHERE event_id = ?").run(event.id);
+    sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM event_reminders WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM events WHERE id = ?").run(event.id);
     await safeEdit(interaction, { content: "✅ Event deleted." });
@@ -251,6 +258,7 @@ export class EventService {
     if (updated) {
       await this.updateEventMessage(interaction.client, updated);
       eventLogSent = await this.sendEndedLog(interaction.guild, updated, interaction.user.id, new Date());
+      await this.removeGoingRoleFromAssignedMembers(interaction.guild, updated);
     }
     await safeEdit(interaction, {
       content: [
@@ -317,6 +325,8 @@ export class EventService {
       VALUES (?, ?, ?)
       ON CONFLICT(event_id, user_id) DO UPDATE SET status = excluded.status
     `).run(event.id, interaction.user.id, status);
+
+    await this.syncGoingRole(interaction.guild!, event, interaction.user.id, status);
 
     await interaction.update({
       embeds: [eventRenderer.renderEventEmbed(event, this.getCounts(event.id))],
@@ -550,6 +560,73 @@ export class EventService {
     return channel.messages.fetch(event.messageId).catch(() => null);
   }
 
+  private async syncGoingRole(guild: Guild, event: EventRecord, userId: string, status: RsvpStatus) {
+    if (!event.goingRole) return;
+
+    if (status === "going") {
+      await this.addGoingRole(guild, event, userId);
+      return;
+    }
+
+    await this.removeGoingRole(guild, event, userId);
+  }
+
+  private async addGoingRole(guild: Guild, event: EventRecord, userId: string) {
+    if (!event.goingRole) return;
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    const role = await guild.roles.fetch(event.goingRole).catch(() => null);
+
+    if (!member || !role) {
+      logger.warn(`Could not assign Going role for event ${event.id}: member or role missing.`);
+      return;
+    }
+
+    await member.roles.add(role, `RSVP Going for event ${event.eventNumber}`).then(() => {
+      sqlite.prepare(`
+        INSERT OR IGNORE INTO event_role_assignments (event_id, user_id, role_id)
+        VALUES (?, ?, ?)
+      `).run(event.id, userId, event.goingRole);
+    }).catch(error => {
+      logger.warn(`Failed to assign Going role ${event.goingRole} to ${userId} for event ${event.id}.`, error);
+    });
+  }
+
+  private async removeGoingRole(guild: Guild, event: EventRecord, userId: string) {
+    if (!event.goingRole) return;
+
+    const assignment = sqlite
+      .prepare("SELECT 1 FROM event_role_assignments WHERE event_id = ? AND user_id = ? AND role_id = ?")
+      .get(event.id, userId, event.goingRole);
+
+    if (!assignment) return;
+
+    const member = await guild.members.fetch(userId).catch(() => null);
+    const role = await guild.roles.fetch(event.goingRole).catch(() => null);
+
+    if (member && role) {
+      await member.roles.remove(role, `RSVP changed for event ${event.eventNumber}`).catch(error => {
+        logger.warn(`Failed to remove Going role ${event.goingRole} from ${userId} for event ${event.id}.`, error);
+      });
+    }
+
+    sqlite
+      .prepare("DELETE FROM event_role_assignments WHERE event_id = ? AND user_id = ? AND role_id = ?")
+      .run(event.id, userId, event.goingRole);
+  }
+
+  private async removeGoingRoleFromAssignedMembers(guild: Guild, event: EventRecord) {
+    if (!event.goingRole) return;
+
+    const rows = sqlite
+      .prepare("SELECT user_id AS userId FROM event_role_assignments WHERE event_id = ? AND role_id = ?")
+      .all(event.id, event.goingRole) as { userId: string }[];
+
+    for (const row of rows) {
+      await this.removeGoingRole(guild, event, row.userId);
+    }
+  }
+
   private canExportParticipants(interaction: ChatInputCommandInteraction, event: EventRecord) {
     if (interaction.user.id === event.hostId) return true;
     if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
@@ -757,6 +834,7 @@ export class EventService {
       endTimestamp: row.end_timestamp,
       maxPlayers: row.max_players,
       pingRole: row.ping_role,
+      goingRole: row.going_role,
       status: row.status,
       createdAt: row.created_at,
     };

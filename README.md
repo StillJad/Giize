@@ -4,10 +4,11 @@ Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Mine
 
 ## Features
 
-- Event creation, RSVP tracking, participant lists, live embed updates, and reminders.
+- Event creation, RSVP tracking, participant exports, live embed updates, Going roles, logs, and reminders.
 - Simple private ticket channels with plain text transcripts.
 - Welcome embeds with placeholders and optional join roles.
-- Minecraft Java/Bedrock verification with confirmation buttons, nickname updates, role assignment, and logs.
+- Minecraft Java/Bedrock verification with Java account lookup, confirmation buttons, nickname updates, platform roles, and logs.
+- Discord audit logging for messages, members, moderation, roles, channels, threads, voice, invites, and server updates.
 - Minecraft server IP and status commands.
 - SQLite persistence for events, participants, welcome settings, tickets, and counters.
 
@@ -51,6 +52,9 @@ Enable these in the Discord Developer Portal and keep them in the bot client:
 - Message Content Intent
 - Guilds
 - Guild Messages
+- Guild Moderation
+- Guild Voice States
+- Guild Invites
 
 ## Required Permissions
 
@@ -65,6 +69,9 @@ Recommended bot permissions:
 - Attach Files
 - Embed Links
 - Use Slash Commands
+- View Audit Log
+- Ban Members
+- Moderate Members
 
 The bot role must be above roles it assigns and above members whose nicknames it changes.
 
@@ -80,9 +87,13 @@ Production configuration:
 
 - `STAFF_ROLE_ID`
 - `VERIFY_ROLE_ID`
+- `JAVA_VERIFIED_ROLE_ID`
+- `BEDROCK_VERIFIED_ROLE_ID`
 - `TICKET_CATEGORY_ID`
 - `TICKET_LOGS_CHANNEL_ID`
+- `EVENT_LOGS_CHANNEL_ID`
 - `VERIFICATION_LOG_CHANNEL_ID`
+- `AUDIT_LOGS_CHANNEL_ID`
 - `WELCOME_CHANNEL_ID`
 - `WELCOME_BANNER_URL`
 - `WELCOME_ROLE_ID`
@@ -120,6 +131,7 @@ Events:
 - `/event delete`
 - `/event end`
 - `/event list`
+- `/participants`
 
 Tickets:
 
@@ -132,8 +144,10 @@ Tickets:
 Welcome:
 
 - `/welcome setup`
+- `/welcome enable`
 - `/welcome preview`
 - `/welcome disable`
+- `/welcome refresh`
 
 Verification:
 

@@ -22,10 +22,16 @@ CREATE TABLE IF NOT EXISTS button_roles (
 );
 
 CREATE TABLE IF NOT EXISTS verified_players (
-  discord_id TEXT PRIMARY KEY,
-  minecraft_uuid TEXT NOT NULL,
-  minecraft_username TEXT NOT NULL,
-  platform TEXT NOT NULL,
+  guild_id TEXT,
+  discord_id TEXT NOT NULL,
+  java_username TEXT,
+  java_uuid TEXT,
+  bedrock_username TEXT,
+  verified_java_at INTEGER,
+  verified_bedrock_at INTEGER,
+  minecraft_uuid TEXT,
+  minecraft_username TEXT,
+  platform TEXT,
   verification_code TEXT,
   verified INTEGER DEFAULT 0,
   verified_at INTEGER,
@@ -68,6 +74,7 @@ CREATE TABLE IF NOT EXISTS events (
   end_timestamp INTEGER NOT NULL,
   max_players INTEGER,
   ping_role TEXT,
+  going_role TEXT,
   status TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
@@ -83,6 +90,14 @@ CREATE TABLE IF NOT EXISTS event_participants (
   FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS event_role_assignments (
+  event_id INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  PRIMARY KEY (event_id, user_id, role_id),
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS event_reminders (
   event_id INTEGER NOT NULL,
   reminder_key TEXT NOT NULL,
@@ -90,6 +105,41 @@ CREATE TABLE IF NOT EXISTS event_reminders (
   PRIMARY KEY (event_id, reminder_key),
   FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 );
+`);
+
+function columnExists(table: string, column: string) {
+  const columns = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  return columns.some(existingColumn => existingColumn.name === column);
+}
+
+function addColumnIfMissing(table: string, column: string, definition: string) {
+  if (!columnExists(table, column)) {
+    sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+addColumnIfMissing("verified_players", "guild_id", "TEXT");
+addColumnIfMissing("verified_players", "java_username", "TEXT");
+addColumnIfMissing("verified_players", "java_uuid", "TEXT");
+addColumnIfMissing("verified_players", "bedrock_username", "TEXT");
+addColumnIfMissing("verified_players", "verified_java_at", "INTEGER");
+addColumnIfMissing("verified_players", "verified_bedrock_at", "INTEGER");
+addColumnIfMissing("events", "going_role", "TEXT");
+
+sqlite.exec(`
+CREATE UNIQUE INDEX IF NOT EXISTS verified_players_guild_discord_idx
+ON verified_players (guild_id, discord_id);
+
+UPDATE verified_players
+SET java_username = COALESCE(java_username, minecraft_username),
+    java_uuid = COALESCE(java_uuid, minecraft_uuid),
+    verified_java_at = COALESCE(verified_java_at, verified_at)
+WHERE platform = 'java' AND minecraft_username IS NOT NULL;
+
+UPDATE verified_players
+SET bedrock_username = COALESCE(bedrock_username, minecraft_username),
+    verified_bedrock_at = COALESCE(verified_bedrock_at, verified_at)
+WHERE platform = 'bedrock' AND minecraft_username IS NOT NULL;
 `);
 
 export const db = drizzle(sqlite);

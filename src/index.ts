@@ -3,6 +3,7 @@ import { Events } from "discord.js";
 import { client } from "./client.js";
 import { config } from "./config/config.js";
 import "./database/database.js";
+import "./handlers/AuditLogHandler.js";
 import { loadCommands } from "./handlers/CommandHandler.js";
 import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";

@@ -41,6 +41,9 @@ export const command: Command = {
         .addRoleOption(option =>
           option.setName("ping_role").setDescription("Role to ping for the event.").setRequired(false)
         )
+        .addRoleOption(option =>
+          option.setName("going_role").setDescription("Role given to members who RSVP Going").setRequired(false)
+        )
     )
     .addSubcommand(subcommand =>
       subcommand
@@ -76,6 +79,9 @@ export const command: Command = {
         )
         .addRoleOption(option =>
           option.setName("ping_role").setDescription("New role to ping for reminders.").setRequired(false)
+        )
+        .addRoleOption(option =>
+          option.setName("going_role").setDescription("New role given to members who RSVP Going.").setRequired(false)
         )
     )
     .addSubcommand(subcommand =>
@@ -120,9 +126,10 @@ export const command: Command = {
         duration: interaction.options.getString("duration", true),
         location: interaction.options.getString("location"),
         maxPlayers: interaction.options.getInteger("max_players"),
-        pingRole: interaction.options.getRole("ping_role") as Role | null,
-        channel: interaction.options.getChannel("channel", true) as TextChannel,
-      });
+          pingRole: interaction.options.getRole("ping_role") as Role | null,
+          goingRole: interaction.options.getRole("going_role") as Role | null,
+          channel: interaction.options.getChannel("channel", true) as TextChannel,
+        });
       return;
     }
 
@@ -135,9 +142,10 @@ export const command: Command = {
         time: interaction.options.getString("time"),
         duration: interaction.options.getString("duration"),
         location: interaction.options.getString("location"),
-        maxPlayers: interaction.options.getInteger("max_players"),
-        pingRole: interaction.options.getRole("ping_role") as Role | null,
-      });
+          maxPlayers: interaction.options.getInteger("max_players"),
+          pingRole: interaction.options.getRole("ping_role") as Role | null,
+          goingRole: interaction.options.getRole("going_role") as Role | null,
+        });
       return;
     }
 

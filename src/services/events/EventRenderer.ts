@@ -23,6 +23,7 @@ export type EventRecord = {
   endTimestamp: number;
   maxPlayers: number | null;
   pingRole: string | null;
+  goingRole: string | null;
   status: EventStatus;
   createdAt: number;
 };

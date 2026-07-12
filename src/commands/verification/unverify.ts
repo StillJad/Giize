@@ -1,5 +1,6 @@
 import { SlashCommandBuilder, GuildMember } from "discord.js";
 import { config } from "../../config/config.js";
+import { verificationService } from "../../services/verification/VerificationService.js";
 import type { Command } from "../../types/Command.js";
 import { giizeEmbed } from "../../utils/embeds.js";
 
@@ -18,25 +19,11 @@ export const command: Command = {
     }
 
     const member = interaction.member as GuildMember;
-    const roleId = config.verifyRoleId;
-
-    if (roleId) {
-      const role = interaction.guild!.roles.cache.get(roleId);
-
-      if (role && member.roles.cache.has(roleId)) {
-        await member.roles.remove(role, "Unverified via /unverify");
-      }
-    }
-
-    if (member.manageable) {
-      await member.setNickname(null, "Unverified via /unverify").catch(() => {});
-    }
+    await verificationService.unverifyMember(interaction.guild!, member);
 
     const logChannelId = config.verificationLogsChannelId;
-
     if (logChannelId) {
-      const channel = interaction.guild!.channels.cache.get(logChannelId);
-
+      const channel = await interaction.guild!.channels.fetch(logChannelId).catch(() => null);
       if (channel?.isTextBased()) {
         await channel.send({
           embeds: [

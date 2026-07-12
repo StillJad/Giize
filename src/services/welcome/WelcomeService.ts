@@ -282,6 +282,10 @@ export class WelcomeService {
     }
 
     await (channel as GuildTextBasedChannel).send({
+      content: `<@${member.id}>`,
+      allowedMentions: {
+        users: [member.id],
+      },
       embeds: [welcomeRenderer.render(member)],
     });
 

@@ -1,9 +1,9 @@
 import { Events, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import { client } from "../client.js";
-import { config } from "../config/config.js";
 import { eventRouter } from "../services/events/EventRouter.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
+import { verificationService } from "../services/verification/VerificationService.js";
 import { giizeEmbed } from "../utils/embeds.js";
 import { logger } from "../utils/logger.js";
 
@@ -82,7 +82,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const hasPlatformPayload = verificationParts[0] === "java" || verificationParts[0] === "bedrock";
     const platform = hasPlatformPayload && verificationParts[0] === "bedrock" ? "bedrock" : "java";
     const platformLabel = platform === "java" ? "Java" : "Bedrock";
-    const username = hasPlatformPayload ? verificationParts.slice(1).join(":") : verificationPayload;
+    const hasUuidPayload = hasPlatformPayload && verificationParts.length >= 3;
+    const javaUuid = hasUuidPayload && platform === "java" ? verificationParts[1] || null : null;
+    const username = hasPlatformPayload
+      ? verificationParts.slice(hasUuidPayload ? 2 : 1).join(":")
+      : verificationPayload;
+
+    if (!username) {
+      await safeReply(interaction, {
+        embeds: [
+          giizeEmbed()
+            .setTitle("Verification Failed")
+            .setDescription("That Minecraft username could not be found.\n\nPlease double-check the spelling and try again.")
+            .setFooter({ text: "Giize Events Verification System" }),
+        ],
+        flags: 64,
+      });
+      return;
+    }
 
     try {
       if (!interaction.inGuild()) {
@@ -97,48 +114,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const member = interaction.member as GuildMember;
 
-      if (member.manageable) {
-        await member.setNickname(username);
-      }
-
-      const roleId = config.verifyRoleId;
-
-      if (roleId) {
-        const role = guild.roles.cache.get(roleId);
-
-        if (role) {
-          await member.roles.add(role, "Verified via /verify");
-        }
-      }
-
-      const logChannelId = config.verificationLogsChannelId;
-
-      if (logChannelId) {
-        const channel = guild.channels.cache.get(logChannelId);
-
-        if (channel?.isTextBased()) {
-          await channel.send({
-            embeds: [
-              giizeEmbed()
-                .setTitle("✅ Member Verified")
-                .addFields(
-                  {
-                    name: "Discord",
-                    value: `${member}`,
-                    inline: true,
-                  },
-                  {
-                    name: "Minecraft Username",
-                    value: username,
-                    inline: true,
-                  }
-                )
-                .setFooter({ text: "Giize Events Verification System" })
-                .setTimestamp(),
-            ],
-          });
-        }
-      }
+      const result = await verificationService.verifyMember(guild, member, platform, username, javaUuid);
 
       await safeUpdate(interaction, {
         content: "",
@@ -149,7 +125,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             .addFields(
               { name: "Minecraft Username", value: username, inline: true },
               { name: "Platform", value: platformLabel, inline: true },
-              { name: "Nickname", value: username, inline: false }
+              { name: "Nickname", value: result.nickname, inline: false }
             )
             .setFooter({ text: "Giize Events Verification System" }),
         ],

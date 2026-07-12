@@ -8,6 +8,7 @@ import {
 import type { Command } from "../../types/Command.js";
 import { giizeEmbed } from "../../utils/embeds.js";
 import { VerificationService } from "../../services/verification/VerificationService.js";
+import { minecraftProfileService } from "../../services/verification/MinecraftProfileService.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
@@ -31,6 +32,8 @@ export const command: Command = {
     ),
 
   async execute(interaction) {
+    await interaction.deferReply({ flags: 64 });
+
     const username = interaction.options.getString("minecraft_username", true);
 
     const platform = interaction.options.getString(
@@ -39,10 +42,28 @@ export const command: Command = {
     ) as "java" | "bedrock";
     const platformLabel = platform === "java" ? "Java" : "Bedrock";
 
-    const normalized = VerificationService.normalizeUsername(
+    let normalized = VerificationService.normalizeUsername(
       username,
       platform
     );
+    let javaUuid = "";
+
+    if (platform === "java") {
+      const result = await minecraftProfileService.checkJavaUsername(normalized);
+
+      if (!result.exists) {
+        await interaction.editReply({
+          content: result.reason === "network"
+            ? "Minecraft account lookup is temporarily unavailable. Please try again later."
+            : "",
+          embeds: result.reason === "network" ? [] : [VerificationService.failureEmbed()],
+        });
+        return;
+      }
+
+      normalized = result.canonicalUsername;
+      javaUuid = result.uuid;
+    }
 
     const embed = giizeEmbed()
       .setTitle("Verify Minecraft Account")
@@ -56,7 +77,7 @@ export const command: Command = {
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
-        .setCustomId(`verify_yes:${platform}:${normalized}`)
+        .setCustomId(`verify_yes:${platform}:${javaUuid}:${normalized}`)
         .setLabel("Confirm Verification")
         .setEmoji("✅")
         .setStyle(ButtonStyle.Success),
@@ -68,10 +89,9 @@ export const command: Command = {
         .setStyle(ButtonStyle.Danger)
     );
 
-    await interaction.reply({
+    await interaction.editReply({
       embeds: [embed],
       components: [row],
-      flags: 64
     });
   }
 };

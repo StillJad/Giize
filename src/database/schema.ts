@@ -18,20 +18,19 @@ export const buttonRoles = sqliteTable("button_roles", {
 });
 
 export const verifiedPlayers = sqliteTable("verified_players", {
+  guildId: text("guild_id"),
   discordId: text("discord_id").primaryKey(),
-
-  minecraftUuid: text("minecraft_uuid").notNull(),
-
-  minecraftUsername: text("minecraft_username").notNull(),
-
-  platform: text("platform").notNull(),
-
+  javaUsername: text("java_username"),
+  javaUuid: text("java_uuid"),
+  bedrockUsername: text("bedrock_username"),
+  verifiedJavaAt: integer("verified_java_at"),
+  verifiedBedrockAt: integer("verified_bedrock_at"),
+  minecraftUuid: text("minecraft_uuid"),
+  minecraftUsername: text("minecraft_username"),
+  platform: text("platform"),
   verificationCode: text("verification_code"),
-
   verified: integer("verified").default(0),
-
   verifiedAt: integer("verified_at"),
-
   createdAt: integer("created_at").notNull()
 });
 
@@ -68,6 +67,7 @@ export const events = sqliteTable("events", {
   endTimestamp: integer("end_timestamp").notNull(),
   maxPlayers: integer("max_players"),
   pingRole: text("ping_role"),
+  goingRole: text("going_role"),
   status: text("status").notNull(),
   createdAt: integer("created_at").notNull()
 });
