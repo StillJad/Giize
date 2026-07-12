@@ -6,6 +6,7 @@ import "./database/database.js";
 import { loadCommands } from "./handlers/CommandHandler.js";
 import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";
+import "./handlers/SelectMenuHandler.js";
 import "./handlers/WelcomeHandler.js";
 import { reminderService } from "./services/events/ReminderService.js";
 import { logger } from "./utils/logger.js";

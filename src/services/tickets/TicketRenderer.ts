@@ -1,7 +1,7 @@
 import type { User } from "discord.js";
 import { giizeEmbed } from "../../utils/embeds.js";
 
-export type TicketType = "Support" | "Report" | "Appeal" | "Builder" | "Media";
+export type TicketType = "Support" | "Report" | "Player Report" | "Appeal" | "Builder" | "Media";
 
 export type TicketWelcome = {
   ticketNumber: string;

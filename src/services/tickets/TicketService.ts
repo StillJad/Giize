@@ -37,7 +37,7 @@ export class TicketService {
   private readonly activeTickets = new Map<string, ActiveTicket>();
   private readonly openingTickets = new Set<string>();
 
-  async open(interaction: ChatInputCommandInteraction, type: TicketType, reason: string) {
+  async open(interaction: ChatInputCommandInteraction | ModalSubmitInteraction, type: TicketType, reason: string) {
     await interaction.deferReply({ flags: 64 });
 
     if (!interaction.inGuild() || !interaction.guild) {
