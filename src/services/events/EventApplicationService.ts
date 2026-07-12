@@ -89,7 +89,6 @@ export class EventApplicationService {
               .setLabel("Why should you play the event?")
               .setStyle(TextInputStyle.Paragraph)
               .setRequired(true)
-              .setMinLength(40)
               .setMaxLength(1000)
           ),
           new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -98,7 +97,6 @@ export class EventApplicationService {
               .setLabel("What will you do in the event?")
               .setStyle(TextInputStyle.Paragraph)
               .setRequired(true)
-              .setMinLength(40)
               .setMaxLength(1000)
           )
         )
@@ -129,8 +127,8 @@ export class EventApplicationService {
     const answerOne = interaction.fields.getTextInputValue("answer_one").trim();
     const answerTwo = interaction.fields.getTextInputValue("answer_two").trim();
 
-    if (!this.isValidAnswer(answerOne) || !this.isValidAnswer(answerTwo)) {
-      await safeEdit(interaction, { content: "Both answers must contain at least two complete sentences." });
+    if (!answerOne || !answerTwo) {
+      await safeEdit(interaction, { content: "Please answer both questions before submitting." });
       return;
     }
 
@@ -376,10 +374,6 @@ export class EventApplicationService {
       reviewedAt: row.reviewed_at,
       createdAt: row.created_at,
     };
-  }
-
-  private isValidAnswer(answer: string) {
-    return answer.trim().length >= 40 && (answer.match(/[.!?]/g)?.length ?? 0) >= 2;
   }
 
   private priorityFor(member: GuildMember): EventApplicationPriority {
