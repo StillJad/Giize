@@ -47,7 +47,11 @@ export const command: Command = {
         .setName("edit")
         .setDescription("Edit an existing event.")
         .addIntegerOption(option =>
-          option.setName("event").setDescription("Event number.").setRequired(true).setMinValue(1)
+          option
+            .setName("event_id")
+            .setDescription("The Event ID shown by /event create or /event list")
+            .setRequired(true)
+            .setMinValue(1)
         )
         .addStringOption(option =>
           option.setName("title").setDescription("New event title.").setRequired(false).setMaxLength(120)
@@ -79,7 +83,11 @@ export const command: Command = {
         .setName("delete")
         .setDescription("Delete an event.")
         .addIntegerOption(option =>
-          option.setName("event").setDescription("Event number.").setRequired(true).setMinValue(1)
+          option
+            .setName("event_id")
+            .setDescription("The Event ID shown by /event create or /event list")
+            .setRequired(true)
+            .setMinValue(1)
         )
     )
     .addSubcommand(subcommand =>
@@ -87,7 +95,11 @@ export const command: Command = {
         .setName("end")
         .setDescription("End and lock an event.")
         .addIntegerOption(option =>
-          option.setName("event").setDescription("Event number.").setRequired(true).setMinValue(1)
+          option
+            .setName("event_id")
+            .setDescription("The Event ID shown by /event create or /event list")
+            .setRequired(true)
+            .setMinValue(1)
         )
     )
     .addSubcommand(subcommand =>
@@ -116,7 +128,7 @@ export const command: Command = {
 
     if (subcommand === "edit") {
       await eventService.edit(interaction, {
-        eventNumber: interaction.options.getInteger("event", true),
+        eventNumber: interaction.options.getInteger("event_id", true),
         title: interaction.options.getString("title"),
         description: interaction.options.getString("description"),
         date: interaction.options.getString("date"),
@@ -130,12 +142,12 @@ export const command: Command = {
     }
 
     if (subcommand === "delete") {
-      await eventService.delete(interaction, interaction.options.getInteger("event", true));
+      await eventService.delete(interaction, interaction.options.getInteger("event_id", true));
       return;
     }
 
     if (subcommand === "end") {
-      await eventService.end(interaction, interaction.options.getInteger("event", true));
+      await eventService.end(interaction, interaction.options.getInteger("event_id", true));
       return;
     }
 

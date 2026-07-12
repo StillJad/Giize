@@ -107,36 +107,37 @@ export class EventRenderer {
     event: EventRecord,
     participants: EventParticipantGroup,
     counts: EventCounts,
+    endedById: string,
     endedAt: Date,
     duration: string
   ) {
-    const totalResponses = counts.going + counts.maybe + counts.cant;
-
     return giizeEmbed()
       .setTitle("Event Ended")
       .addFields(
+        { name: "Event ID", value: `${event.eventNumber}`, inline: true },
         { name: "Event Name", value: event.title, inline: true },
-        { name: "Host", value: `<@${event.hostId}>`, inline: true },
-        { name: "Started", value: `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, inline: true },
-        { name: "Ended", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
+        { name: "Ended By", value: `<@${endedById}>`, inline: true },
+        { name: "Created By / Host", value: `<@${event.hostId}>`, inline: true },
+        { name: "Started At", value: `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, inline: true },
+        { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
         { name: "Duration", value: duration, inline: true },
-        { name: "Total Responses", value: `${totalResponses}`, inline: true },
-        { name: "Going", value: `${counts.going}`, inline: true },
-        { name: "Maybe", value: `${counts.maybe}`, inline: true },
-        { name: "Can't Go", value: `${counts.cant}`, inline: true },
-        this.logParticipantField("✅ Going", participants.going),
-        this.logParticipantField("❔ Maybe", participants.maybe),
-        this.logParticipantField("❌ Can't Go", participants.cant)
+        { name: "Going count", value: `${counts.going}`, inline: true },
+        { name: "Maybe count", value: `${counts.maybe}`, inline: true },
+        { name: "Can't Go count", value: `${counts.cant}`, inline: true },
+        this.logParticipantField("Going", participants.going),
+        this.logParticipantField("Maybe", participants.maybe),
+        this.logParticipantField("Can't Go", participants.cant)
       );
   }
 
   renderListEmbed(events: EventRecord[]) {
     const fields: APIEmbedField[] = events.map(event => ({
-      name: event.title,
+      name: `ID: ${event.eventNumber}`,
       value: [
-        `Starts <t:${Math.floor(event.startTimestamp / 1000)}:R>`,
-        `Host <@${event.hostId}>`,
-        `Status ${event.status}`,
+        `Title: ${event.title}`,
+        `Status: ${event.status === "scheduled" ? "Active" : "Ended"}`,
+        `Starts: <t:${Math.floor(event.startTimestamp / 1000)}:F>`,
+        `Channel: <#${event.channelId}>`,
       ].join("\n"),
       inline: false,
     }));

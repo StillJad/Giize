@@ -122,7 +122,15 @@ export class EventService {
     });
 
     sqlite.prepare("UPDATE events SET message_id = ? WHERE id = ?").run(message.id, event.id);
-    await safeEdit(interaction, { content: `✅ Event created in ${input.channel}.` });
+    await safeEdit(interaction, {
+      content: [
+        "Event created successfully.",
+        "",
+        `Event ID: ${event.eventNumber}`,
+        `Title: ${event.title}`,
+        `Channel: ${input.channel}`,
+      ].join("\n"),
+    });
   }
 
   async edit(interaction: ChatInputCommandInteraction, input: EventEditInput) {
@@ -136,19 +144,23 @@ export class EventService {
     const event = this.getByNumber(interaction.guild.id, input.eventNumber);
 
     if (!event) {
-      await safeEdit(interaction, { content: "❌ Event not found." });
+      await safeEdit(interaction, { content: "No event was found with that ID." });
       return;
     }
 
     if (event.status === "ended") {
-      await safeEdit(interaction, { content: "❌ Ended events can't be edited." });
+      await safeEdit(interaction, { content: "That event has already ended." });
       return;
     }
 
-    const nextDate = input.date ?? new Date(event.startTimestamp).toString();
-    const nextTime = input.time;
+    const hasTimeChange = Boolean(input.date || input.time || input.duration);
     const nextDuration = input.duration ?? `${Math.max(1, Math.round((event.endTimestamp - event.startTimestamp) / 60000))}m`;
-    const parsedTime = this.parseEventTime(nextDate, nextTime, nextDuration);
+    const parsedTime = hasTimeChange
+      ? this.parseEventTime(input.date ?? `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, input.time, nextDuration)
+      : {
+          startTimestamp: event.startTimestamp,
+          endTimestamp: event.endTimestamp,
+        };
 
     if (!parsedTime) {
       await safeEdit(interaction, {
@@ -189,7 +201,7 @@ export class EventService {
     const event = this.getByNumber(interaction.guild.id, eventNumber);
 
     if (!event) {
-      await safeEdit(interaction, { content: "❌ Event not found." });
+      await safeEdit(interaction, { content: "No event was found with that ID." });
       return;
     }
 
@@ -211,17 +223,31 @@ export class EventService {
     const event = this.getByNumber(interaction.guild.id, eventNumber);
 
     if (!event) {
-      await safeEdit(interaction, { content: "❌ Event not found." });
+      await safeEdit(interaction, { content: "No event was found with that ID." });
+      return;
+    }
+
+    if (event.status === "ended") {
+      await safeEdit(interaction, { content: "That event has already ended." });
       return;
     }
 
     sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
     const updated = this.getById(event.id);
+    let eventLogSent = false;
     if (updated) {
       await this.updateEventMessage(interaction.client, updated);
-      await this.sendEndedLog(interaction.client, updated, new Date());
+      eventLogSent = await this.sendEndedLog(interaction.guild, updated, interaction.user.id, new Date());
     }
-    await safeEdit(interaction, { content: "✅ Event ended and locked." });
+    await safeEdit(interaction, {
+      content: [
+        "Event ended successfully.",
+        "",
+        `Event ID: ${event.eventNumber}`,
+        `Title: ${event.title}`,
+        `Event log sent: ${eventLogSent ? "Yes" : "No"}`,
+      ].join("\n"),
+    });
   }
 
   async list(interaction: ChatInputCommandInteraction) {
@@ -233,7 +259,12 @@ export class EventService {
     }
 
     const events = sqlite
-      .prepare("SELECT * FROM events WHERE guild_id = ? ORDER BY start_timestamp ASC LIMIT 25")
+      .prepare(`
+        SELECT * FROM events
+        WHERE guild_id = ?
+        ORDER BY CASE WHEN status = 'scheduled' THEN 0 ELSE 1 END, created_at DESC
+        LIMIT 25
+      `)
       .all(interaction.guild.id)
       .map(row => this.toEvent(row as EventRow));
 
@@ -358,28 +389,76 @@ export class EventService {
     }
   }
 
-  private async sendEndedLog(client: Client, event: EventRecord, endedAt: Date) {
+  private async sendEndedLog(guild: Guild, event: EventRecord, endedById: string, endedAt: Date) {
     try {
-      const channel = await client.channels.fetch(config.eventLogsChannelId).catch(() => null);
+      const channel = await guild.channels.fetch(config.eventLogsChannelId).catch(error => {
+        logger.warn("Failed to fetch event logs channel.", error);
+        return null;
+      });
+
+      logger.info(`Event logs channel found: ${Boolean(channel)}`);
+
+      if (!channel) {
+        logger.warn(`Event logs channel ${config.eventLogsChannelId} was not found.`);
+        return false;
+      }
+
+      logger.info(`Event logs channel name: ${"name" in channel ? channel.name : "unknown"}`);
+      logger.info(`Event logs channel type: ${channel.type}`);
 
       if (!channel?.isTextBased() || !("send" in channel)) {
-        logger.warn(`Event logs channel ${config.eventLogsChannelId} was not found or is not text based.`);
-        return;
+        logger.warn(`Event logs channel ${config.eventLogsChannelId} is not text based.`);
+        return false;
       }
+
+      const botMember = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
+
+      if (!botMember) {
+        logger.warn("Could not resolve bot member for event logs.");
+        return false;
+      }
+
+      const permissions = channel.permissionsFor(botMember);
+      const permissionChecks = [
+        ["View Channel", PermissionFlagsBits.ViewChannel],
+        ["Send Messages", PermissionFlagsBits.SendMessages],
+        ["Embed Links", PermissionFlagsBits.EmbedLinks],
+      ] as const;
+
+      for (const [label, permission] of permissionChecks) {
+        logger.info(`${label}: ${Boolean(permissions?.has(permission))}`);
+      }
+
+      const missingPermissions = permissionChecks
+        .filter(([, permission]) => !permissions?.has(permission))
+        .map(([label]) => label);
+
+      if (missingPermissions.length > 0) {
+        for (const permission of missingPermissions) {
+          logger.warn(`Missing event logs permission: ${permission}`);
+        }
+        return false;
+      }
+
+      const participants = this.getParticipants(event.id);
+      const counts = this.getCounts(event.id);
 
       await channel.send({
         embeds: [
           eventRenderer.renderEndedLogEmbed(
             event,
-            this.getParticipants(event.id),
-            this.getCounts(event.id),
+            participants,
+            counts,
+            endedById,
             endedAt,
             this.formatDuration(endedAt.getTime() - event.startTimestamp)
           ),
         ],
       });
+      return true;
     } catch (error) {
       logger.warn("Failed to send event end log.", error);
+      return false;
     }
   }
 
