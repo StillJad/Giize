@@ -156,6 +156,16 @@ CREATE TABLE IF NOT EXISTS automod_warnings (
   created_at INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS moderation_warnings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  moderator_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  source TEXT NOT NULL DEFAULT 'manual',
+  created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS event_applications (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   event_id INTEGER NOT NULL,

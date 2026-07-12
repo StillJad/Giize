@@ -532,15 +532,10 @@ export class TicketService {
         return null;
       });
 
-      logger.warn(`Ticket logs channel found? ${Boolean(channel)}`);
-
       if (!channel) {
         logger.warn(`Ticket logs channel ${config.ticketLogsChannelId} was not found. Skipping logs.`);
         return;
       }
-
-      logger.warn(`Ticket logs channel name: ${"name" in channel ? channel.name : "unknown"}`);
-      logger.warn(`Ticket logs channel type: ${channel.type}`);
 
       if (!channel.isTextBased() || !("send" in channel)) {
         logger.warn(`Ticket logs channel ${config.ticketLogsChannelId} is not text based. Skipping logs.`);
@@ -561,10 +556,6 @@ export class TicketService {
         ["Attach Files", PermissionFlagsBits.AttachFiles],
         ["Embed Links", PermissionFlagsBits.EmbedLinks],
       ] as const;
-
-      for (const [label, permission] of permissionChecks) {
-        logger.warn(`Ticket logs bot permission ${label}: ${Boolean(permissions?.has(permission))}`);
-      }
 
       const missingPermissions = permissionChecks
         .filter(([, permission]) => !permissions?.has(permission))
@@ -649,16 +640,7 @@ export class TicketService {
   }
 
   private logTicketPriority(member: GuildMember, priority: TicketPriority) {
-    logger.info(`Ticket priority detected ${JSON.stringify({
-      memberId: member.id,
-      detectedPriority: priority,
-      diamondConfigured: Boolean(config.diamondSupporterRoleId),
-      ironConfigured: Boolean(config.ironSupporterRoleId),
-      dirtConfigured: Boolean(config.dirtSupporterRoleId),
-      hasDiamondRole: Boolean(config.diamondSupporterRoleId && member.roles.cache.has(config.diamondSupporterRoleId)),
-      hasIronRole: Boolean(config.ironSupporterRoleId && member.roles.cache.has(config.ironSupporterRoleId)),
-      hasDirtRole: Boolean(config.dirtSupporterRoleId && member.roles.cache.has(config.dirtSupporterRoleId)),
-    })}`);
+    logger.info(`Ticket priority: member=${member.id} priority=${priority}`);
   }
 
   private sortTicketChannels(channels: TextChannel[]) {

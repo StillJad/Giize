@@ -6,6 +6,7 @@ import { safeReply } from "../services/tickets/interactionResponses.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
 import { verificationService } from "../services/verification/VerificationService.js";
 import { purgeService } from "../services/purge/PurgeService.js";
+import { moderationService } from "../services/moderation/ModerationService.js";
 import { giizeEmbed } from "../utils/embeds.js";
 import { logger } from "../utils/logger.js";
 
@@ -53,6 +54,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.customId.startsWith("purge_cancel:")) {
       const [, purgeId] = interaction.customId.split(":");
       await purgeService.cancel(interaction, purgeId);
+      return;
+    }
+
+    if (interaction.customId.startsWith("moderation_clear_warnings_confirm:")) {
+      const confirmationId = interaction.customId.substring("moderation_clear_warnings_confirm:".length);
+      await moderationService.confirmClearWarnings(interaction, confirmationId);
+      return;
+    }
+
+    if (interaction.customId.startsWith("moderation_clear_warnings_cancel:")) {
+      const confirmationId = interaction.customId.substring("moderation_clear_warnings_cancel:".length);
+      await moderationService.cancelClearWarnings(interaction, confirmationId);
       return;
     }
 
