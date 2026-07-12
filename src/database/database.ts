@@ -105,6 +105,56 @@ CREATE TABLE IF NOT EXISTS event_reminders (
   PRIMARY KEY (event_id, reminder_key),
   FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS automod_configs (
+  guild_id TEXT PRIMARY KEY,
+  enabled INTEGER NOT NULL DEFAULT 0,
+  spam_enabled INTEGER NOT NULL DEFAULT 1,
+  duplicate_enabled INTEGER NOT NULL DEFAULT 1,
+  mention_limit INTEGER NOT NULL DEFAULT 5,
+  emoji_limit INTEGER NOT NULL DEFAULT 12,
+  caps_percentage INTEGER NOT NULL DEFAULT 80,
+  invite_links_enabled INTEGER NOT NULL DEFAULT 1,
+  external_links_enabled INTEGER NOT NULL DEFAULT 0,
+  timeout_minutes INTEGER NOT NULL DEFAULT 10,
+  log_channel_id TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS automod_exempt_roles (
+  guild_id TEXT NOT NULL,
+  role_id TEXT NOT NULL,
+  PRIMARY KEY (guild_id, role_id)
+);
+
+CREATE TABLE IF NOT EXISTS automod_exempt_channels (
+  guild_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  PRIMARY KEY (guild_id, channel_id)
+);
+
+CREATE TABLE IF NOT EXISTS automod_banned_words (
+  guild_id TEXT NOT NULL,
+  word TEXT NOT NULL,
+  match_type TEXT NOT NULL,
+  PRIMARY KEY (guild_id, word)
+);
+
+CREATE TABLE IF NOT EXISTS automod_allowed_domains (
+  guild_id TEXT NOT NULL,
+  domain TEXT NOT NULL,
+  PRIMARY KEY (guild_id, domain)
+);
+
+CREATE TABLE IF NOT EXISTS automod_warnings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  guild_id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  rule TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
 `);
 
 function columnExists(table: string, column: string) {

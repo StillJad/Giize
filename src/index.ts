@@ -4,6 +4,7 @@ import { client } from "./client.js";
 import { config } from "./config/config.js";
 import "./database/database.js";
 import "./handlers/AuditLogHandler.js";
+import "./handlers/AutoModHandler.js";
 import { loadCommands } from "./handlers/CommandHandler.js";
 import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";
@@ -20,6 +21,7 @@ logger.info(`✓ Loaded commands (${commands.size})`);
 logger.info("✓ Loaded events");
 logger.info("✓ Loaded buttons");
 logger.info("✓ Loaded modals");
+logger.info("✓ Loaded AutoMod");
 
 client.once(Events.ClientReady, ready => {
   logger.info(`✓ Logged in as ${ready.user.tag}`);

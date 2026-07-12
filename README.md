@@ -9,6 +9,7 @@ Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Mine
 - Welcome embeds with placeholders and optional join roles.
 - Minecraft Java/Bedrock verification with Java account lookup, confirmation buttons, nickname updates, platform roles, and logs.
 - Discord audit logging for messages, members, moderation, roles, channels, threads, voice, invites, and server updates.
+- Configurable AutoMod for spam, duplicate messages, mentions, emojis, invites, links, banned words, and excessive caps.
 - Minecraft server IP and status commands.
 - SQLite persistence for events, participants, welcome settings, tickets, and counters.
 
@@ -72,6 +73,7 @@ Recommended bot permissions:
 - View Audit Log
 - Ban Members
 - Moderate Members
+- Manage Messages
 
 The bot role must be above roles it assigns and above members whose nicknames it changes.
 
@@ -162,6 +164,16 @@ Verification:
 Admin:
 
 - `/setup`
+- `/automod status`
+- `/automod enable`
+- `/automod disable`
+- `/automod configure`
+- `/automod word add`
+- `/automod word remove`
+- `/automod word list`
+- `/automod domain allow`
+- `/automod domain remove`
+- `/automod domain list`
 
 ## Screenshots
 

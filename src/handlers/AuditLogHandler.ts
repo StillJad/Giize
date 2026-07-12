@@ -16,6 +16,7 @@ import {
   type VoiceState,
 } from "discord.js";
 import { client } from "../client.js";
+import { autoModTracker } from "../services/automod/AutoModTracker.js";
 import { auditLogService } from "../services/audit/AuditLogService.js";
 import { logger } from "../utils/logger.js";
 
@@ -51,6 +52,7 @@ function memberName(member: GuildMember | PartialGuildMember) {
 
 client.on(Events.MessageDelete, async (message: Message | PartialMessage) => {
   if (!message.guild || message.author?.bot) return;
+  if (autoModTracker.wasAutoModDelete(message.id)) return;
 
   const modId = await moderator(message.guild, AuditLogEvent.MessageDelete, message.author?.id);
   await auditLogService.send(message.guild, "Message Deleted", [
