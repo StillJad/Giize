@@ -1,8 +1,9 @@
 import { eq } from "drizzle-orm";
-import type { Guild, GuildMember, GuildTextBasedChannel } from "discord.js";
+import { PermissionFlagsBits, type Guild, type GuildMember, type GuildTextBasedChannel } from "discord.js";
 import { config } from "../../config/config.js";
 import { db } from "../../database/database.js";
 import { welcomeConfigs } from "../../database/schema.js";
+import { logger } from "../../utils/logger.js";
 import { welcomeRenderer } from "./WelcomeRenderer.js";
 
 export type WelcomeConfig = {
@@ -132,23 +133,132 @@ export class WelcomeService {
 
   async sendWelcome(member: GuildMember) {
     const savedConfig = await this.getConfig(member.guild.id);
+    const enabled = savedConfig?.enabled ?? true;
+    const channelId = savedConfig?.channelId || config.welcomeChannelId;
 
-    if (savedConfig && !savedConfig.enabled) {
+    this.logJoin("member joined", {
+      memberId: member.id,
+      guildId: member.guild.id,
+      configFound: Boolean(savedConfig),
+      enabled,
+      channelId,
+    });
+
+    if (!enabled) {
+      this.logJoin("welcome skipped because disabled", {
+        memberId: member.id,
+        guildId: member.guild.id,
+      });
       return;
     }
 
-    if (config.welcomeRoleId) {
-      await member.roles.add(config.welcomeRoleId, "Welcome role").catch(() => {});
+    const roleId = savedConfig?.roleId || config.welcomeRoleId;
+
+    if (roleId) {
+      await member.roles.add(roleId, "Welcome role")
+        .then(() => {
+          this.logJoin("welcome auto-role assigned", {
+            memberId: member.id,
+            guildId: member.guild.id,
+            roleId,
+          });
+        })
+        .catch(error => {
+          logger.warn(`Welcome auto-role assignment failed: ${JSON.stringify({
+            memberId: member.id,
+            guildId: member.guild.id,
+            roleId,
+          })}`, error);
+        });
+    } else {
+      this.logJoin("welcome auto-role skipped", {
+        memberId: member.id,
+        guildId: member.guild.id,
+        roleId: null,
+      });
     }
 
-    const channel = member.guild.channels.cache.get(config.welcomeChannelId);
+    const channel = await member.guild.channels.fetch(channelId).catch(error => {
+      logger.warn(`Welcome channel fetch failed: ${JSON.stringify({
+        memberId: member.id,
+        guildId: member.guild.id,
+        channelId,
+      })}`, error);
+      return null;
+    });
+
+    const isTextBased = Boolean(channel?.isTextBased());
+
+    this.logJoin("welcome channel resolved", {
+      memberId: member.id,
+      guildId: member.guild.id,
+      channelId,
+      channelExists: Boolean(channel),
+      isTextBased,
+    });
 
     if (!channel?.isTextBased() || !("send" in channel)) {
+      logger.warn(`Welcome message not sent: ${JSON.stringify({
+        memberId: member.id,
+        guildId: member.guild.id,
+        channelId,
+        reason: !channel ? "channel missing" : "channel is not text based",
+      })}`);
+      return;
+    }
+
+    const botMember = member.guild.members.me ?? (await member.guild.members.fetchMe().catch(() => null));
+
+    if (!botMember) {
+      logger.warn(`Welcome message not sent: ${JSON.stringify({
+        memberId: member.id,
+        guildId: member.guild.id,
+        channelId,
+        reason: "bot member could not be resolved",
+      })}`);
+      return;
+    }
+
+    const permissions = channel.permissionsFor(botMember);
+    const permissionStatus = {
+      viewChannel: Boolean(permissions?.has(PermissionFlagsBits.ViewChannel)),
+      sendMessages: Boolean(permissions?.has(PermissionFlagsBits.SendMessages)),
+      embedLinks: Boolean(permissions?.has(PermissionFlagsBits.EmbedLinks)),
+    };
+
+    this.logJoin("welcome channel permissions", {
+      memberId: member.id,
+      guildId: member.guild.id,
+      channelId,
+      ...permissionStatus,
+    });
+
+    const missingPermissions = [
+      permissionStatus.viewChannel ? "" : "View Channel",
+      permissionStatus.sendMessages ? "" : "Send Messages",
+      permissionStatus.embedLinks ? "" : "Embed Links",
+    ].filter(Boolean);
+
+    if (missingPermissions.length > 0) {
+      logger.warn(`Welcome message not sent: ${JSON.stringify({
+        memberId: member.id,
+        guildId: member.guild.id,
+        channelId,
+        reason: "missing permissions",
+        missingPermissions,
+      })}`);
       return;
     }
 
     await (channel as GuildTextBasedChannel).send({
       embeds: [welcomeRenderer.render(member)],
+    });
+
+    this.logJoin("welcome message sent", {
+      memberId: member.id,
+      guildId: member.guild.id,
+      channelId,
+      sent: true,
     });
   }
 
@@ -171,6 +281,10 @@ export class WelcomeService {
 
   private optionalColor(value?: string | null) {
     return value && /^#[0-9a-f]{6}$/i.test(value) ? value : null;
+  }
+
+  private logJoin(message: string, data: Record<string, unknown>) {
+    logger.info(`Welcome join: ${message} ${JSON.stringify(data)}`);
   }
 }
 
