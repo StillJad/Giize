@@ -5,6 +5,7 @@ import { eventRouter } from "../services/events/EventRouter.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
 import { verificationService } from "../services/verification/VerificationService.js";
+import { purgeService } from "../services/purge/PurgeService.js";
 import { giizeEmbed } from "../utils/embeds.js";
 import { logger } from "../utils/logger.js";
 
@@ -42,6 +43,18 @@ function decodeVerificationUsername(value: string) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
+
+    if (interaction.customId.startsWith("purge_confirm:")) {
+      const [, purgeId, stage] = interaction.customId.split(":");
+      await purgeService.confirm(interaction, purgeId, stage === "final");
+      return;
+    }
+
+    if (interaction.customId.startsWith("purge_cancel:")) {
+      const [, purgeId] = interaction.customId.split(":");
+      await purgeService.cancel(interaction, purgeId);
+      return;
+    }
 
     if (interaction.customId.startsWith("event_apply:") || interaction.customId.startsWith("event_app_")) {
       await eventApplicationRouter.handleButton(interaction);
