@@ -15,7 +15,7 @@ import type { TicketType } from "./TicketRenderer.js";
 const panelTicketTypes = {
   support: "Support",
   report: "Player Report",
-  appeal: "Appeal",
+  help: "Help",
 } satisfies Record<string, TicketType>;
 
 function panelTicketType(value: string) {

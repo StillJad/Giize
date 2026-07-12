@@ -10,14 +10,14 @@ import {
 import { giizeEmbed } from "../../utils/embeds.js";
 import type { Command } from "../../types/Command.js";
 
-const ticketStaffRoleId = "1513916326400495838";
+const developerRoleId = "1518110330377736323";
 
 function canCreateTicketPanel(member: unknown) {
   return (
     member instanceof GuildMember &&
     (
       member.permissions.has(PermissionFlagsBits.Administrator) ||
-      member.roles.cache.has(ticketStaffRoleId)
+      member.roles.cache.has(developerRoleId)
     )
   );
 }
@@ -26,6 +26,7 @@ export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("ticketpanel")
     .setDescription("Ticket panel commands.")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand
         .setName("send")
@@ -91,10 +92,10 @@ export const command: Command = {
                 value: "report",
               },
               {
-                label: "Appeal",
-                description: "Appeal a punishment or staff action.",
-                emoji: "⚖️",
-                value: "appeal",
+                label: "Help",
+                description: "General questions or other assistance.",
+                emoji: "❓",
+                value: "help",
               }
             )
         ),
