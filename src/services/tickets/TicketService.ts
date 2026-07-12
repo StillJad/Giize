@@ -305,34 +305,33 @@ export class TicketService {
       closedAt,
       duration,
     };
-    let transcriptHtml = this.fallbackTranscriptHtml(transcriptMetadata);
+    let transcript = transcriptService.createFallbackText(transcriptMetadata);
 
     try {
-      transcriptHtml = await transcriptService.createHtml(channel, transcriptMetadata);
+      transcript = await transcriptService.createText(channel, transcriptMetadata);
     } catch (error) {
       logger.warn("Failed to generate ticket transcript. Continuing close flow.", error);
     }
 
-    let transcriptArchive:
+    let transcriptFile:
       | {
           directory: string;
-          htmlPath: string;
-          zipPath: string;
-          zipFilename: string;
+          filePath: string;
+          filename: string;
         }
       | undefined;
 
     try {
-      transcriptArchive = await transcriptService.createTempArchive(transcriptHtml, ticket.ticketNumber);
+      transcriptFile = await transcriptService.createTempFile(transcript, ticket.ticketNumber);
     } catch (error) {
-      logger.warn("Failed to save ticket transcript archive. Continuing close flow.", error);
+      logger.warn("Failed to save ticket transcript file. Continuing close flow.", error);
     }
 
-    await this.sendTicketLog(interaction.guild, log, transcriptArchive);
-    await this.sendCreatorDm(interaction, ticket.creatorId, log, transcriptArchive);
+    await this.sendTicketLog(interaction.guild, log, transcriptFile);
+    await this.sendCreatorDm(interaction, ticket.creatorId, log, transcriptFile);
 
-    if (transcriptArchive) {
-      await transcriptService.removeTempArchive(transcriptArchive);
+    if (transcriptFile) {
+      await transcriptService.removeTempFile(transcriptFile);
     }
 
     this.activeTickets.delete(channel.id);
@@ -384,7 +383,7 @@ export class TicketService {
   private async sendTicketLog(
     guild: Guild,
     log: Parameters<typeof ticketRenderer.renderLogEmbed>[0],
-    transcriptArchive: { zipPath: string; zipFilename: string } | undefined
+    transcriptFile: { filePath: string; filename: string } | undefined
   ) {
     try {
       const channel = await guild.channels.fetch(config.ticketLogsChannelId).catch(error => {
@@ -437,14 +436,14 @@ export class TicketService {
         return;
       }
 
-      if (!transcriptArchive) {
-        logger.warn("Transcript archive was not available. Skipping ticket logs.");
+      if (!transcriptFile) {
+        logger.warn("Transcript file was not available. Skipping ticket logs.");
         return;
       }
 
       await channel.send({
         embeds: [ticketRenderer.renderLogEmbed(log)],
-        files: [transcriptService.createAttachment(transcriptArchive.zipPath, transcriptArchive.zipFilename)],
+        files: [transcriptService.createAttachment(transcriptFile.filePath, transcriptFile.filename)],
       });
     } catch (error) {
       logger.warn("Failed to send ticket logs. Continuing close flow.", error);
@@ -455,11 +454,11 @@ export class TicketService {
     interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction,
     creatorId: string,
     log: Parameters<typeof ticketRenderer.renderClosedDmEmbed>[0],
-    transcriptArchive: { zipPath: string; zipFilename: string } | undefined
+    transcriptFile: { filePath: string; filename: string } | undefined
   ) {
     try {
-      if (!transcriptArchive) {
-        logger.warn("Transcript archive was not available. Skipping ticket creator DM.");
+      if (!transcriptFile) {
+        logger.warn("Transcript file was not available. Skipping ticket creator DM.");
         return;
       }
 
@@ -467,7 +466,7 @@ export class TicketService {
 
       await creator.send({
         embeds: [ticketRenderer.renderClosedDmEmbed(log)],
-        files: [transcriptService.createAttachment(transcriptArchive.zipPath, transcriptArchive.zipFilename)],
+        files: [transcriptService.createAttachment(transcriptFile.filePath, transcriptFile.filename)],
       });
     } catch (error) {
       logger.warn("Failed to DM ticket creator. Continuing close flow.", error);
@@ -570,10 +569,6 @@ export class TicketService {
     await channel.delete("Ticket closed").catch(error => {
       logger.warn("Failed to delete ticket channel.", error);
     });
-  }
-
-  private fallbackTranscriptHtml(metadata: Parameters<typeof transcriptService.createHtml>[1]) {
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${metadata.ticketNumber}</title></head><body><h1>${metadata.ticketNumber}</h1><p>Transcript generation failed.</p></body></html>`;
   }
 }
 

@@ -5,7 +5,7 @@ Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Mine
 ## Features
 
 - Event creation, RSVP tracking, participant lists, live embed updates, and reminders.
-- Simple private ticket channels with HTML transcripts delivered as ZIP files.
+- Simple private ticket channels with plain text transcripts.
 - Welcome embeds with placeholders and optional join roles.
 - Minecraft Java/Bedrock verification with confirmation buttons, nickname updates, role assignment, and logs.
 - Minecraft server IP and status commands.
@@ -124,10 +124,10 @@ Events:
 Tickets:
 
 - `/ticket open`
-- `/ticket close`
-- `/ticket add`
-- `/ticket remove`
-- `/ticket rename`
+- `/ticketstaff close`
+- `/ticketstaff add`
+- `/ticketstaff remove`
+- `/ticketstaff rename`
 
 Welcome:
 
