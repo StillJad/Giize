@@ -87,7 +87,10 @@ export class EventRenderer {
   renderParticipantsEmbed(event: EventRecord, participants: EventParticipantGroup) {
     return giizeEmbed()
       .setTitle("Participants")
-      .setDescription(event.title)
+      .setDescription([
+        `Event ID: ${event.eventNumber}`,
+        `Event: ${event.title}`,
+      ].join("\n"))
       .addFields(
         this.participantField("✅ Going", participants.going),
         this.participantField("❌ Can't Go", participants.cant)

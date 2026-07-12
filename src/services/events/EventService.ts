@@ -1,4 +1,6 @@
 import {
+  AttachmentBuilder,
+  GuildMember,
   PermissionFlagsBits,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
@@ -7,6 +9,9 @@ import {
   type Role,
   type TextChannel,
 } from "discord.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
@@ -19,6 +24,8 @@ import {
   type EventStatus,
   type RsvpStatus,
 } from "./EventRenderer.js";
+
+const developerRoleId = "1518110330377736323";
 
 type EventRow = {
   id: number;
@@ -60,6 +67,12 @@ type EventEditInput = {
   location: string | null;
   maxPlayers: number | null;
   pingRole: Role | null;
+};
+
+type ParticipantExportFile = {
+  fileName: string;
+  filePath: string;
+  directory: string;
 };
 
 export class EventService {
@@ -325,10 +338,10 @@ export class EventService {
     });
   }
 
-  async participants(interaction: ChatInputCommandInteraction, eventQuery: string | null) {
+  async participants(interaction: ChatInputCommandInteraction, eventQuery: string | null, shouldExport: boolean) {
     await interaction.deferReply({ flags: 64 });
 
-    if (!interaction.inGuild() || !interaction.guildId) {
+    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
       await safeEdit(interaction, { content: "❌ Events can only be viewed in a server." });
       return;
     }
@@ -339,6 +352,25 @@ export class EventService {
 
     if (!event) {
       await safeEdit(interaction, { content: "There are no active events." });
+      return;
+    }
+
+    if (shouldExport) {
+      if (!this.canExportParticipants(interaction, event)) {
+        await safeEdit(interaction, { content: "You don't have permission to export participants." });
+        return;
+      }
+
+      const exportFile = await this.generateParticipantExport(interaction.guild, event);
+
+      try {
+        await safeEdit(interaction, {
+          content: "Participants exported successfully.",
+          files: [new AttachmentBuilder(exportFile.filePath, { name: exportFile.fileName })],
+        });
+      } finally {
+        await this.deleteParticipantExport(exportFile);
+      }
       return;
     }
 
@@ -387,6 +419,35 @@ export class EventService {
     } catch (error) {
       logger.warn(`Failed to send ${key} reminder for event ${event.id}.`, error);
     }
+  }
+
+  async generateParticipantExport(guild: Guild, event: EventRecord): Promise<ParticipantExportFile> {
+    const participants = this.getParticipants(event.id);
+    const goingNames = await this.resolveDisplayNames(guild, participants.going);
+    const cantNames = await this.resolveDisplayNames(guild, participants.cant);
+    const fileName = `event-${event.eventNumber}-participants.txt`;
+    const directory = await mkdtemp(join(tmpdir(), "giize-event-participants-"));
+    const filePath = join(directory, fileName);
+    const contents = [
+      "GIIZE EVENTS PARTICIPANT EXPORT",
+      "",
+      `Event ID: ${event.eventNumber}`,
+      `Event: ${event.title}`,
+      `Exported At: ${this.formatExportDate(new Date())}`,
+      "",
+      `GOING (${goingNames.length})`,
+      this.formatExportNames(goingNames),
+      "",
+      `CAN'T GO (${cantNames.length})`,
+      this.formatExportNames(cantNames),
+      "",
+      "GOING USERNAMES ONLY",
+      this.formatExportNames(goingNames),
+      "",
+    ].join("\n");
+
+    await writeFile(filePath, contents, "utf8");
+    return { fileName, filePath, directory };
   }
 
   private async sendEndedLog(guild: Guild, event: EventRecord, endedById: string, endedAt: Date) {
@@ -442,20 +503,26 @@ export class EventService {
 
       const participants = this.getParticipants(event.id);
       const counts = this.getCounts(event.id);
+      const exportFile = await this.generateParticipantExport(guild, event);
 
-      await channel.send({
-        embeds: [
-          eventRenderer.renderEndedLogEmbed(
-            event,
-            participants,
-            counts,
-            endedById,
-            endedAt,
-            this.formatDuration(endedAt.getTime() - event.startTimestamp)
-          ),
-        ],
-      });
-      return true;
+      try {
+        await channel.send({
+          embeds: [
+            eventRenderer.renderEndedLogEmbed(
+              event,
+              participants,
+              counts,
+              endedById,
+              endedAt,
+              this.formatDuration(endedAt.getTime() - event.startTimestamp)
+            ),
+          ],
+          files: [new AttachmentBuilder(exportFile.filePath, { name: exportFile.fileName })],
+        });
+        return true;
+      } finally {
+        await this.deleteParticipantExport(exportFile);
+      }
     } catch (error) {
       logger.warn("Failed to send event end log.", error);
       return false;
@@ -481,6 +548,52 @@ export class EventService {
     const channel = await client.channels.fetch(event.channelId).catch(() => null);
     if (!channel?.isTextBased() || !("messages" in channel)) return null;
     return channel.messages.fetch(event.messageId).catch(() => null);
+  }
+
+  private canExportParticipants(interaction: ChatInputCommandInteraction, event: EventRecord) {
+    if (interaction.user.id === event.hostId) return true;
+    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
+
+    const member = interaction.member;
+    return (
+      member instanceof GuildMember &&
+      (member.roles.cache.has(developerRoleId) || member.roles.cache.has(config.staffRoleId))
+    );
+  }
+
+  private async deleteParticipantExport(file: ParticipantExportFile) {
+    await rm(file.filePath, { force: true }).catch(error =>
+      logger.warn(`Failed to delete participant export file ${file.filePath}.`, error)
+    );
+    await rm(file.directory, { recursive: true, force: true }).catch(error =>
+      logger.warn(`Failed to delete participant export directory ${file.directory}.`, error)
+    );
+  }
+
+  private async resolveDisplayNames(guild: Guild, userIds: string[]) {
+    const names: string[] = [];
+
+    for (const userId of userIds) {
+      const member = await guild.members.fetch(userId).catch(() => null);
+      names.push(member?.displayName?.replace(/\s+/g, " ").trim() || "UnknownUser");
+    }
+
+    return names;
+  }
+
+  private formatExportNames(names: string[]) {
+    return names.length > 0 ? names.join(" ") : "None";
+  }
+
+  private formatExportDate(date: Date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    const hour24 = date.getHours();
+    const hour12 = hour24 % 12 || 12;
+    const minutes = String(date.getMinutes()).padStart(2, "0");
+    const period = hour24 >= 12 ? "PM" : "AM";
+    return `${year}-${month}-${day} ${hour12}:${minutes} ${period}`;
   }
 
   private getById(id: number) {
