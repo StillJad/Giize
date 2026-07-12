@@ -4,7 +4,7 @@ import { logger } from "../../utils/logger.js";
 import { eventService } from "./EventService.js";
 import type { RsvpStatus } from "./EventRenderer.js";
 
-const rsvpStatuses = new Set<RsvpStatus>(["going", "cant"]);
+const rsvpStatuses = new Set<RsvpStatus>(["cant"]);
 
 export class EventRouter {
   async handleButton(interaction: ButtonInteraction) {

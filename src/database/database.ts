@@ -155,6 +155,24 @@ CREATE TABLE IF NOT EXISTS automod_warnings (
   reason TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS event_applications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  event_id INTEGER NOT NULL,
+  guild_id TEXT NOT NULL,
+  discord_id TEXT NOT NULL,
+  minecraft_username TEXT NOT NULL,
+  platform TEXT NOT NULL,
+  answer_one TEXT NOT NULL,
+  answer_two TEXT NOT NULL,
+  status TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  reviewed_by TEXT,
+  reviewed_at INTEGER,
+  created_at INTEGER NOT NULL,
+  UNIQUE(event_id, discord_id),
+  FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+);
 `);
 
 function columnExists(table: string, column: string) {

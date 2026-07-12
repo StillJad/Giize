@@ -1,5 +1,6 @@
 import { Events, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import { client } from "../client.js";
+import { eventApplicationRouter } from "../services/events/EventApplicationRouter.js";
 import { eventRouter } from "../services/events/EventRouter.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
@@ -41,6 +42,11 @@ function decodeVerificationUsername(value: string) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
+
+    if (interaction.customId.startsWith("event_apply:") || interaction.customId.startsWith("event_app_")) {
+      await eventApplicationRouter.handleButton(interaction);
+      return;
+    }
 
     if (interaction.customId.startsWith("event_")) {
       await eventRouter.handleButton(interaction);

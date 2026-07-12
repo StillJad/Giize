@@ -1,5 +1,6 @@
 import { Events } from "discord.js";
 import { client } from "../client.js";
+import { eventApplicationRouter } from "../services/events/EventApplicationRouter.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
 import { logger } from "../utils/logger.js";
@@ -7,6 +8,8 @@ import { logger } from "../utils/logger.js";
 client.on(Events.InteractionCreate, async interaction => {
   try {
     if (!interaction.isModalSubmit()) return;
+
+    if (await eventApplicationRouter.handleModal(interaction)) return;
 
     await ticketRouter.handleModal(interaction);
   } catch (error) {

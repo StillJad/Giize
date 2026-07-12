@@ -334,6 +334,21 @@ export class EventService {
     });
   }
 
+  getEventById(eventId: number) {
+    return this.getById(eventId);
+  }
+
+  async acceptApplicant(guild: Guild, client: Client, event: EventRecord, userId: string) {
+    sqlite.prepare(`
+      INSERT INTO event_participants (event_id, user_id, status)
+      VALUES (?, ?, 'going')
+      ON CONFLICT(event_id, user_id) DO UPDATE SET status = 'going'
+    `).run(event.id, userId);
+
+    await this.syncGoingRole(guild, event, userId, "going");
+    await this.updateEventMessage(client, event);
+  }
+
   async showParticipants(interaction: ButtonInteraction, eventId: number) {
     const event = this.getById(eventId);
 
@@ -343,7 +358,7 @@ export class EventService {
     }
 
     await safeReply(interaction, {
-      embeds: [eventRenderer.renderParticipantsEmbed(event, this.getParticipants(event.id))],
+      embeds: [eventRenderer.renderParticipantsEmbed(event, await this.getParticipantsForDisplay(interaction.guild!, event, false))],
       flags: 64,
     });
   }
@@ -385,7 +400,7 @@ export class EventService {
     }
 
     await safeEdit(interaction, {
-      embeds: [eventRenderer.renderParticipantsEmbed(event, this.getParticipants(event.id))],
+      embeds: [eventRenderer.renderParticipantsEmbed(event, await this.getParticipantsForDisplay(interaction.guild, event, this.canViewApplicationCounts(interaction)))],
     });
   }
 
@@ -433,7 +448,7 @@ export class EventService {
 
   async generateParticipantExport(guild: Guild, event: EventRecord): Promise<ParticipantExportFile> {
     const participants = this.getParticipants(event.id);
-    const goingNames = await this.resolveDisplayNames(guild, participants.going);
+    const goingNames = await this.resolveParticipantNames(guild, event.id, participants.going);
     const cantNames = await this.resolveDisplayNames(guild, participants.cant);
     const fileName = `event-${event.eventNumber}-participants.txt`;
     const directory = await mkdtemp(join(tmpdir(), "giize-event-participants-"));
@@ -511,7 +526,7 @@ export class EventService {
         return false;
       }
 
-      const participants = this.getParticipants(event.id);
+      const participants = await this.getParticipantsForDisplay(guild, event, true);
       const counts = this.getCounts(event.id);
       const exportFile = await this.generateParticipantExport(guild, event);
 
@@ -656,6 +671,62 @@ export class EventService {
     }
 
     return names;
+  }
+
+  private async resolveParticipantNames(guild: Guild, eventId: number, userIds: string[]) {
+    const applicationRows = sqlite
+      .prepare(`
+        SELECT discord_id AS discordId, minecraft_username AS minecraftUsername
+        FROM event_applications
+        WHERE event_id = ? AND status = 'accepted'
+      `)
+      .all(eventId) as { discordId: string; minecraftUsername: string }[];
+    const minecraftNames = new Map(applicationRows.map(row => [row.discordId, row.minecraftUsername]));
+    const names: string[] = [];
+    const seen = new Set<string>();
+
+    for (const userId of userIds) {
+      const name = minecraftNames.get(userId) ?? (await this.resolveDisplayNames(guild, [userId]))[0] ?? "UnknownUser";
+      const key = name.toLowerCase();
+
+      if (!seen.has(key)) {
+        names.push(name);
+        seen.add(key);
+      }
+    }
+
+    return names;
+  }
+
+  private async getParticipantsForDisplay(guild: Guild, event: EventRecord, includeApplicationCounts: boolean) {
+    const participants = this.getParticipants(event.id);
+    return {
+      ...participants,
+      goingNames: await this.resolveParticipantNames(guild, event.id, participants.going),
+      applicationCounts: includeApplicationCounts ? this.getApplicationCounts(event.id) : undefined,
+    };
+  }
+
+  private canViewApplicationCounts(interaction: ChatInputCommandInteraction) {
+    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
+    const member = interaction.member;
+    return member instanceof GuildMember &&
+      (member.roles.cache.has(developerRoleId) || member.roles.cache.has(config.staffRoleId));
+  }
+
+  private getApplicationCounts(eventId: number) {
+    const rows = sqlite
+      .prepare(`
+        SELECT status, COUNT(*) AS total
+        FROM event_applications
+        WHERE event_id = ?
+        GROUP BY status
+      `)
+      .all(eventId) as { status: "accepted" | "pending" | "rejected"; total: number }[];
+    const counts = { accepted: 0, pending: 0, rejected: 0 };
+
+    for (const row of rows) counts[row.status] = row.total;
+    return counts;
   }
 
   private formatExportNames(names: string[]) {

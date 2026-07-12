@@ -9,6 +9,7 @@ export const config = {
   javaVerifiedRoleId: process.env.JAVA_VERIFIED_ROLE_ID ?? "1518342424290656416",
   bedrockVerifiedRoleId: process.env.BEDROCK_VERIFIED_ROLE_ID ?? "1518342346419343601",
   ticketCategoryId: process.env.TICKET_CATEGORY_ID ?? "1521169950079975595",
+  eventApplicationCategoryId: process.env.EVENT_APPLICATION_CATEGORY_ID ?? "",
   ticketLogsChannelId: process.env.TICKET_LOGS_CHANNEL_ID ?? "1517296636135477511",
   diamondSupporterRoleId: process.env.DIAMOND_SUPPORTER_ROLE_ID ?? "",
   ironSupporterRoleId: process.env.IRON_SUPPORTER_ROLE_ID ?? "",

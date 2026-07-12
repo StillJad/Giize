@@ -33,6 +33,12 @@ export type EventCounts = Record<RsvpStatus, number>;
 export type EventParticipantGroup = {
   going: string[];
   cant: string[];
+  goingNames?: string[];
+  applicationCounts?: {
+    accepted: number;
+    pending: number;
+    rejected: number;
+  };
 };
 
 export class EventRenderer {
@@ -70,9 +76,9 @@ export class EventRenderer {
     return [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
         new ButtonBuilder()
-          .setCustomId(`event_rsvp:going:${event.id}`)
-          .setEmoji("✅")
-          .setLabel("Going")
+          .setCustomId(`event_apply:${event.id}`)
+          .setEmoji("📝")
+          .setLabel("Apply")
           .setStyle(ButtonStyle.Success)
           .setDisabled(disabled),
         new ButtonBuilder()
@@ -86,16 +92,30 @@ export class EventRenderer {
   }
 
   renderParticipantsEmbed(event: EventRecord, participants: EventParticipantGroup) {
+    const fields = [
+      this.participantField("✅ Going", participants.goingNames ?? participants.going, Boolean(participants.goingNames)),
+      this.participantField("❌ Can't Go", participants.cant),
+    ];
+
+    if (participants.applicationCounts) {
+      fields.push({
+        name: "Applications",
+        value: [
+          `Accepted: ${participants.applicationCounts.accepted}`,
+          `Pending: ${participants.applicationCounts.pending}`,
+          `Rejected: ${participants.applicationCounts.rejected}`,
+        ].join("\n"),
+        inline: false,
+      });
+    }
+
     return giizeEmbed()
       .setTitle("Participants")
       .setDescription([
         `Event ID: ${event.eventNumber}`,
         `Event: ${event.title}`,
       ].join("\n"))
-      .addFields(
-        this.participantField("✅ Going", participants.going),
-        this.participantField("❌ Can't Go", participants.cant)
-      );
+      .addFields(fields);
   }
 
   renderEndedLogEmbed(
@@ -106,21 +126,31 @@ export class EventRenderer {
     endedAt: Date,
     duration: string
   ) {
+    const fields = [
+      { name: "Event ID", value: `${event.eventNumber}`, inline: true },
+      { name: "Event Name", value: event.title, inline: true },
+      { name: "Ended By", value: `<@${endedById}>`, inline: true },
+      { name: "Created By / Host", value: `<@${event.hostId}>`, inline: true },
+      { name: "Started At", value: `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, inline: true },
+      { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
+      { name: "Duration", value: duration, inline: true },
+      { name: "Going count", value: `${counts.going}`, inline: true },
+      { name: "Can't Go count", value: `${counts.cant}`, inline: true },
+      this.logParticipantField("Going", participants.goingNames ?? participants.going),
+      this.logParticipantField("Can't Go", participants.cant),
+    ];
+
+    if (participants.applicationCounts) {
+      fields.push(
+        { name: "Accepted Applications", value: `${participants.applicationCounts.accepted}`, inline: true },
+        { name: "Pending Applications", value: `${participants.applicationCounts.pending}`, inline: true },
+        { name: "Rejected Applications", value: `${participants.applicationCounts.rejected}`, inline: true }
+      );
+    }
+
     return giizeEmbed()
       .setTitle("Event Ended")
-      .addFields(
-        { name: "Event ID", value: `${event.eventNumber}`, inline: true },
-        { name: "Event Name", value: event.title, inline: true },
-        { name: "Ended By", value: `<@${endedById}>`, inline: true },
-        { name: "Created By / Host", value: `<@${event.hostId}>`, inline: true },
-        { name: "Started At", value: `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, inline: true },
-        { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
-        { name: "Duration", value: duration, inline: true },
-        { name: "Going count", value: `${counts.going}`, inline: true },
-        { name: "Can't Go count", value: `${counts.cant}`, inline: true },
-        this.logParticipantField("Going", participants.going),
-        this.logParticipantField("Can't Go", participants.cant)
-      );
+      .addFields(fields);
   }
 
   renderListEmbed(events: EventRecord[]) {
@@ -152,10 +182,12 @@ export class EventRenderer {
       );
   }
 
-  private participantField(name: string, users: string[]) {
+  private participantField(name: string, users: string[], plainText = false) {
     return {
       name: `${name} (${users.length})`,
-      value: users.length > 0 ? users.map(userId => `• <@${userId}>`).join("\n").slice(0, 1024) : "No participants.",
+      value: users.length > 0
+        ? users.map(user => plainText ? `• ${user}` : `• <@${user}>`).join("\n").slice(0, 1024)
+        : "No participants.",
       inline: false,
     };
   }
