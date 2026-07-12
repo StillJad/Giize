@@ -525,9 +525,14 @@ export class EventService {
 
   private getCounts(eventId: number): EventCounts {
     const rows = sqlite
-      .prepare("SELECT status, COUNT(*) AS total FROM event_participants WHERE event_id = ? GROUP BY status")
+      .prepare(`
+        SELECT status, COUNT(*) AS total
+        FROM event_participants
+        WHERE event_id = ? AND status IN ('going', 'cant')
+        GROUP BY status
+      `)
       .all(eventId) as { status: RsvpStatus; total: number }[];
-    const counts: EventCounts = { going: 0, maybe: 0, cant: 0 };
+    const counts: EventCounts = { going: 0, cant: 0 };
 
     for (const row of rows) counts[row.status] = row.total;
     return counts;
@@ -535,9 +540,14 @@ export class EventService {
 
   private getParticipants(eventId: number): EventParticipantGroup {
     const rows = sqlite
-      .prepare("SELECT user_id AS userId, status FROM event_participants WHERE event_id = ? ORDER BY status, user_id")
+      .prepare(`
+        SELECT user_id AS userId, status
+        FROM event_participants
+        WHERE event_id = ? AND status IN ('going', 'cant')
+        ORDER BY status, user_id
+      `)
       .all(eventId) as { userId: string; status: RsvpStatus }[];
-    const participants: EventParticipantGroup = { going: [], maybe: [], cant: [] };
+    const participants: EventParticipantGroup = { going: [], cant: [] };
 
     for (const row of rows) participants[row.status].push(row.userId);
     return participants;

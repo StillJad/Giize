@@ -7,7 +7,7 @@ import {
 import { giizeEmbed } from "../../utils/embeds.js";
 
 export type EventStatus = "scheduled" | "ended";
-export type RsvpStatus = "going" | "maybe" | "cant";
+export type RsvpStatus = "going" | "cant";
 
 export type EventRecord = {
   id: number;
@@ -31,7 +31,6 @@ export type EventCounts = Record<RsvpStatus, number>;
 
 export type EventParticipantGroup = {
   going: string[];
-  maybe: string[];
   cant: string[];
 };
 
@@ -53,7 +52,6 @@ export class EventRenderer {
 
     fields.push(
       { name: `👥 Going (${counts.going})`, value: goingValue, inline: true },
-      { name: `❔ Maybe (${counts.maybe})`, value: `${counts.maybe}`, inline: true },
       { name: `❌ Can't Go (${counts.cant})`, value: `${counts.cant}`, inline: true }
     );
 
@@ -77,12 +75,6 @@ export class EventRenderer {
           .setStyle(ButtonStyle.Success)
           .setDisabled(disabled),
         new ButtonBuilder()
-          .setCustomId(`event_rsvp:maybe:${event.id}`)
-          .setEmoji("❔")
-          .setLabel("Maybe")
-          .setStyle(ButtonStyle.Secondary)
-          .setDisabled(disabled),
-        new ButtonBuilder()
           .setCustomId(`event_rsvp:cant:${event.id}`)
           .setEmoji("❌")
           .setLabel("Can't Go")
@@ -98,7 +90,6 @@ export class EventRenderer {
       .setDescription(event.title)
       .addFields(
         this.participantField("✅ Going", participants.going),
-        this.participantField("❔ Maybe", participants.maybe),
         this.participantField("❌ Can't Go", participants.cant)
       );
   }
@@ -122,10 +113,8 @@ export class EventRenderer {
         { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
         { name: "Duration", value: duration, inline: true },
         { name: "Going count", value: `${counts.going}`, inline: true },
-        { name: "Maybe count", value: `${counts.maybe}`, inline: true },
         { name: "Can't Go count", value: `${counts.cant}`, inline: true },
         this.logParticipantField("Going", participants.going),
-        this.logParticipantField("Maybe", participants.maybe),
         this.logParticipantField("Can't Go", participants.cant)
       );
   }
