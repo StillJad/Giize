@@ -1,4 +1,4 @@
-import { Events, GuildMember, type ButtonInteraction } from "discord.js";
+import { Events, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import { client } from "../client.js";
 import { config } from "../config/config.js";
 import { eventRouter } from "../services/events/EventRouter.js";
@@ -19,6 +19,17 @@ async function safeUpdate(
   await interaction.editReply(options);
 }
 
+function canManageTickets(interaction: ButtonInteraction): boolean {
+  if (!interaction.inGuild() || !(interaction.member instanceof GuildMember)) {
+    return false;
+  }
+
+  return (
+    interaction.member.permissions.has(PermissionFlagsBits.Administrator) ||
+    interaction.member.roles.cache.has("1513916326400495838")
+  );
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
@@ -29,11 +40,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     if (interaction.customId === "ticket_close") {
+      if (!canManageTickets(interaction)) {
+        await safeReply(interaction, { content: "Only ticket staff can close tickets.", flags: 64 });
+        return;
+      }
+
       await ticketRouter.handleCloseButton(interaction);
       return;
     }
 
     if (interaction.customId === "ticket_close_reason") {
+      if (!canManageTickets(interaction)) {
+        await safeReply(interaction, { content: "Only ticket staff can close tickets.", flags: 64 });
+        return;
+      }
+
       await ticketRouter.handleCloseReasonButton(interaction);
       return;
     }

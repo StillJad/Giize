@@ -137,10 +137,6 @@ export class TranscriptService {
       }
     }
 
-    for (const row of message.components) {
-      lines.push(`Components: ${JSON.stringify(row.toJSON())}`);
-    }
-
     return lines.join("\n");
   }
 
