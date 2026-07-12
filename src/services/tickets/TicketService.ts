@@ -63,10 +63,9 @@ export class TicketService {
 
     try {
       const botMember = guild.members.me ?? (await guild.members.fetchMe());
-      const member = interaction.member instanceof GuildMember
-        ? interaction.member
-        : await guild.members.fetch(userId);
+      const member = await guild.members.fetch({ user: userId, force: true });
       const priority = this.determineTicketPriority(member);
+      this.logTicketPriority(member, priority);
       const channelName = this.nextTicketChannelName(guild, interaction.user.username);
       const openedAt = new Date();
       const ticketNumber = this.claimNextTicketNumber();
@@ -515,6 +514,19 @@ export class TicketService {
     }
 
     return "Normal";
+  }
+
+  private logTicketPriority(member: GuildMember, priority: TicketPriority) {
+    logger.info(`Ticket priority detected ${JSON.stringify({
+      memberId: member.id,
+      detectedPriority: priority,
+      diamondConfigured: Boolean(config.diamondSupporterRoleId),
+      ironConfigured: Boolean(config.ironSupporterRoleId),
+      dirtConfigured: Boolean(config.dirtSupporterRoleId),
+      hasDiamondRole: Boolean(config.diamondSupporterRoleId && member.roles.cache.has(config.diamondSupporterRoleId)),
+      hasIronRole: Boolean(config.ironSupporterRoleId && member.roles.cache.has(config.ironSupporterRoleId)),
+      hasDirtRole: Boolean(config.dirtSupporterRoleId && member.roles.cache.has(config.dirtSupporterRoleId)),
+    })}`);
   }
 
   private sortTicketChannels(channels: TextChannel[]) {

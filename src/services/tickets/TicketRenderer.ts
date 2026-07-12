@@ -90,11 +90,11 @@ export class TicketRenderer {
   private priorityLabel(priority: TicketPriority) {
     switch (priority) {
       case "Diamond":
-        return "💎 Diamond";
+        return "💎 Diamond Supporter";
       case "Iron":
-        return "🥇 Iron";
+        return "⚙️ Iron Supporter";
       case "Dirt":
-        return "🥉 Dirt";
+        return "🟫 Dirt Supporter";
       case "Normal":
         return "Normal";
     }
