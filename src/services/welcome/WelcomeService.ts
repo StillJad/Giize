@@ -85,6 +85,34 @@ export class WelcomeService {
       .where(eq(welcomeConfigs.guildId, guildId));
   }
 
+  async enable(guildId: string) {
+    const existingConfig = await this.getConfig(guildId);
+
+    if (!existingConfig) {
+      const now = Date.now();
+
+      await db.insert(welcomeConfigs).values({
+        guildId,
+        enabled: 1,
+        channelId: config.welcomeChannelId,
+        title: "Welcome {username} to Giize Events!",
+        description: "Welcome {mention} to Giize Events!",
+        roleId: null,
+        imageUrl: null,
+        thumbnailUrl: null,
+        color: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    await db
+      .update(welcomeConfigs)
+      .set({ enabled: 1, updatedAt: Date.now() })
+      .where(eq(welcomeConfigs.guildId, guildId));
+  }
+
   async getConfig(guildId: string) {
     const [config] = await db
       .select()

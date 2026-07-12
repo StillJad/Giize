@@ -67,6 +67,11 @@ export const command: Command = {
       subcommand
         .setName("disable")
         .setDescription("Disable welcome messages for this server.")
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("enable")
+        .setDescription("Enable welcome messages for this server.")
     ),
 
   async execute(interaction) {
@@ -116,6 +121,12 @@ export const command: Command = {
     if (subcommand === "disable") {
       await welcomeService.disable(interaction.guild.id);
       await interaction.reply({ content: "✅ Welcome system disabled.", flags: 64 });
+      return;
+    }
+
+    if (subcommand === "enable") {
+      await welcomeService.enable(interaction.guild.id);
+      await interaction.reply({ content: "Welcome messages are now enabled.", flags: 64 });
     }
   },
 };
