@@ -32,6 +32,11 @@ type ActiveTicket = {
   openedAt: Date;
 };
 
+type TicketChannelClassification =
+  | { type: "standard"; channel: TextChannel }
+  | { type: "application"; channel: TextChannel; applicantId: string }
+  | { type: "none" };
+
 const noReasonProvided = "No reason provided.";
 
 export class TicketService {
@@ -174,17 +179,19 @@ export class TicketService {
       await safeEdit(interaction, { content: "❌ Only staff can use this command." });
       return;
     }
-    const channel = this.currentTicketChannel(interaction);
+    const classification = this.classifyTicketChannel(interaction);
 
-    if (!channel) {
-      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+    if (classification.type === "none") {
+      await safeEdit(interaction, { content: "This command can only be used inside a ticket." });
       return;
     }
 
-    await channel.permissionOverwrites.edit(user.id, {
+    await classification.channel.permissionOverwrites.edit(user.id, {
       ViewChannel: true,
       SendMessages: true,
       ReadMessageHistory: true,
+      AttachFiles: classification.type === "application" ? true : undefined,
+      EmbedLinks: classification.type === "application" ? true : undefined,
     });
     await safeEdit(interaction, { content: `✅ Added ${user} to this ticket.` });
   }
@@ -195,17 +202,33 @@ export class TicketService {
       await safeEdit(interaction, { content: "❌ Only staff can use this command." });
       return;
     }
-    const channel = this.currentTicketChannel(interaction);
+    const classification = this.classifyTicketChannel(interaction);
 
-    if (!channel) {
-      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+    if (classification.type === "none") {
+      await safeEdit(interaction, { content: "This command can only be used inside a ticket." });
       return;
     }
 
-    await channel.permissionOverwrites.edit(user.id, {
+    if (classification.type === "application" && user.id === classification.applicantId) {
+      await safeEdit(interaction, { content: "You cannot remove the applicant from their application ticket." });
+      return;
+    }
+
+    if (
+      user.id === interaction.client.user.id ||
+      user.id === config.staffRoleId ||
+      user.id === interaction.guild?.roles.everyone.id
+    ) {
+      await safeEdit(interaction, { content: "❌ That user cannot be removed from this ticket." });
+      return;
+    }
+
+    await classification.channel.permissionOverwrites.edit(user.id, {
       ViewChannel: false,
       SendMessages: false,
       ReadMessageHistory: false,
+      AttachFiles: false,
+      EmbedLinks: false,
     });
     await safeEdit(interaction, { content: `✅ Removed ${user} from this ticket.` });
   }
@@ -216,16 +239,16 @@ export class TicketService {
       await safeEdit(interaction, { content: "❌ Only staff can use this command." });
       return;
     }
-    const channel = this.currentTicketChannel(interaction);
+    const classification = this.classifyTicketChannel(interaction);
 
-    if (!channel) {
-      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+    if (classification.type === "none") {
+      await safeEdit(interaction, { content: "This command can only be used inside a ticket." });
       return;
     }
 
     const newName = `ticket-${this.slug(name)}`.slice(0, 100);
-    await channel.setName(newName, `Ticket renamed by ${interaction.user.tag}`);
-    await safeEdit(interaction, { content: `✅ Renamed this ticket to ${channel}.` });
+    await classification.channel.setName(newName, `Ticket renamed by ${interaction.user.tag}`);
+    await safeEdit(interaction, { content: `✅ Renamed this ticket to ${classification.channel}.` });
   }
 
   async requestClose(interaction: ButtonInteraction) {
@@ -284,10 +307,25 @@ export class TicketService {
     }
 
     const channel = interaction.channel as TextChannel;
+    const classification = this.classifyTicketChannel(interaction);
+
+    if (classification.type === "none") {
+      await safeEdit(interaction, { content: "This command can only be used inside a ticket." });
+      return;
+    }
+
+    if (classification.type === "application") {
+      await safeEdit(interaction, { content: "✅ Application ticket closed." }).catch(error => {
+        logger.warn("Failed to acknowledge application ticket close. Continuing close flow.", error);
+      });
+      await this.countdownAndDelete(channel);
+      return;
+    }
+
     const ticket = await this.resolveTicket(channel, interaction.guild);
 
     if (!ticket) {
-      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      await safeEdit(interaction, { content: "This command can only be used inside a ticket." });
       return;
     }
 
@@ -398,6 +436,38 @@ export class TicketService {
     if (!interaction.channel || !("name" in interaction.channel)) return undefined;
     if (!this.hasStandardTicketMetadata(interaction.channel)) return undefined;
     return interaction.channel as TextChannel;
+  }
+
+  private classifyTicketChannel(
+    interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction
+  ): TicketChannelClassification {
+    if (!interaction.channel || !("name" in interaction.channel)) {
+      return { type: "none" };
+    }
+
+    const channel = interaction.channel as TextChannel;
+
+    if (this.hasStandardTicketMetadata(channel)) {
+      return { type: "standard", channel };
+    }
+
+    const application = sqlite
+      .prepare(`
+        SELECT discord_id AS applicantId
+        FROM event_applications
+        WHERE application_channel_id = ?
+      `)
+      .get(channel.id) as { applicantId: string } | undefined;
+
+    if (application) {
+      return {
+        type: "application",
+        channel,
+        applicantId: application.applicantId,
+      };
+    }
+
+    return { type: "none" };
   }
 
   hasStandardTicketMetadata(channel: unknown) {
