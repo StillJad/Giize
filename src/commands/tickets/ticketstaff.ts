@@ -1,6 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import { ticketService } from "../../services/tickets/TicketService.js";
 import type { Command } from "../../types/Command.js";
+import { logger } from "../../utils/logger.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
@@ -56,23 +57,42 @@ export const command: Command = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
-    if (subcommand === "close") {
-      await ticketService.closeFromCommand(interaction, interaction.options.getString("reason", true));
-      return;
-    }
+    try {
+      if (subcommand === "close") {
+        await ticketService.closeFromCommand(interaction, interaction.options.getString("reason", true));
+        return;
+      }
 
-    if (subcommand === "add") {
-      await ticketService.addUser(interaction, interaction.options.getUser("user", true));
-      return;
-    }
+      if (subcommand === "add") {
+        await ticketService.addUser(interaction, interaction.options.getUser("user", true));
+        return;
+      }
 
-    if (subcommand === "remove") {
-      await ticketService.removeUser(interaction, interaction.options.getUser("user", true));
-      return;
-    }
+      if (subcommand === "remove") {
+        await ticketService.removeUser(interaction, interaction.options.getUser("user", true));
+        return;
+      }
 
-    if (subcommand === "rename") {
-      await ticketService.rename(interaction, interaction.options.getString("name", true));
+      if (subcommand === "rename") {
+        await ticketService.rename(interaction, interaction.options.getString("name", true));
+      }
+    } catch (error) {
+      logger.error("Ticket command failed.", error, {
+        type: "command",
+        name: JSON.stringify({
+          command: "ticketstaff",
+          subcommand,
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          channelMetadataFound: ticketService.hasStandardTicketMetadata(interaction.channel),
+        }),
+      });
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply("Something went wrong. Please try again.").catch(() => {});
+      } else {
+        await interaction.reply({ content: "Something went wrong. Please try again.", flags: 64 }).catch(() => {});
+      }
     }
   },
 };

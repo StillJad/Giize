@@ -169,6 +169,7 @@ CREATE TABLE IF NOT EXISTS event_applications (
   priority TEXT NOT NULL,
   reviewed_by TEXT,
   reviewed_at INTEGER,
+  application_channel_id TEXT,
   created_at INTEGER NOT NULL,
   UNIQUE(event_id, discord_id),
   FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
@@ -193,6 +194,7 @@ addColumnIfMissing("verified_players", "bedrock_username", "TEXT");
 addColumnIfMissing("verified_players", "verified_java_at", "INTEGER");
 addColumnIfMissing("verified_players", "verified_bedrock_at", "INTEGER");
 addColumnIfMissing("events", "going_role", "TEXT");
+addColumnIfMissing("event_applications", "application_channel_id", "TEXT");
 
 sqlite.exec(`
 CREATE UNIQUE INDEX IF NOT EXISTS verified_players_guild_discord_idx

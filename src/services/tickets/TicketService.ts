@@ -122,6 +122,7 @@ export class TicketService {
           `Ticket Type: ${type}`,
           `Priority: ${priority}`,
           `Opening Timestamp: ${openedAt.toISOString()}`,
+          `Opening Reason: ${reason.slice(0, 300)}`,
         ].join(" | "),
         permissionOverwrites,
         reason: `Ticket opened by ${interaction.user.tag}`,
@@ -232,7 +233,7 @@ export class TicketService {
   }
 
   async requestCloseReason(interaction: ButtonInteraction) {
-    if (!this.activeTickets.has(interaction.channelId)) {
+    if (!this.hasStandardTicketMetadata(interaction.channel)) {
       await safeReply(interaction, { content: "❌ This is not an active ticket.", flags: 64 });
       return;
     }
@@ -247,6 +248,11 @@ export class TicketService {
 
   async submitCloseReason(interaction: ModalSubmitInteraction) {
     await interaction.deferReply({ flags: 64 });
+
+    if (!this.isStaff(interaction.member)) {
+      await safeEdit(interaction, { content: "❌ Only staff can use this command." });
+      return;
+    }
 
     if (!interaction.channelId) {
       await safeEdit(interaction, { content: "❌ This is not an active ticket." });
@@ -272,14 +278,19 @@ export class TicketService {
       return;
     }
 
-    const ticket = this.activeTickets.get(channelId);
-
-    if (!ticket || !("name" in interaction.channel)) {
+    if (!("name" in interaction.channel)) {
       await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
       return;
     }
 
     const channel = interaction.channel as TextChannel;
+    const ticket = await this.resolveTicket(channel, interaction.guild);
+
+    if (!ticket) {
+      await safeEdit(interaction, { content: "❌ This command only works inside ticket channels." });
+      return;
+    }
+
     const closingReason = closingReasonInput.trim() || noReasonProvided;
     const closedAt = new Date();
     const duration = this.formatDuration(closedAt.getTime() - ticket.openedAt.getTime());
@@ -385,8 +396,59 @@ export class TicketService {
 
   private currentTicketChannel(interaction: ChatInputCommandInteraction) {
     if (!interaction.channel || !("name" in interaction.channel)) return undefined;
-    if (!this.activeTickets.has(interaction.channel.id)) return undefined;
+    if (!this.hasStandardTicketMetadata(interaction.channel)) return undefined;
     return interaction.channel as TextChannel;
+  }
+
+  hasStandardTicketMetadata(channel: unknown) {
+    if (!channel || typeof channel !== "object" || !("id" in channel)) return false;
+
+    const channelId = typeof channel.id === "string" ? channel.id : "";
+    if (channelId && this.activeTickets.has(channelId)) return true;
+
+    if (!("topic" in channel) || typeof channel.topic !== "string") return false;
+    return Boolean(this.parseTicketTopic(channel.topic));
+  }
+
+  private async resolveTicket(channel: TextChannel, guild: Guild) {
+    const activeTicket = this.activeTickets.get(channel.id);
+    if (activeTicket) return activeTicket;
+
+    const parsedTicket = this.parseTicketTopic(channel.topic);
+    if (!parsedTicket) return null;
+
+    const creator = await guild.members.fetch(parsedTicket.creatorId).catch(() => null);
+    return {
+      ...parsedTicket,
+      creatorTag: creator?.user.tag ?? "Unknown",
+    } satisfies ActiveTicket;
+  }
+
+  private parseTicketTopic(topic: string | null) {
+    if (!topic) return null;
+
+    const ticketNumber = topic.match(/(?:^|\|\s*)Ticket\s+(#[0-9]+)/)?.[1];
+    const creatorId = topic.match(/(?:^|\|\s*)Creator ID:\s*(\d+)/)?.[1];
+    const type = this.ticketTypeFromTopic(topic.match(/(?:^|\|\s*)Ticket Type:\s*([^|]+)/)?.[1]?.trim());
+    const priority = this.priorityFromTopic(topic);
+    const openedAtValue = topic.match(/(?:^|\|\s*)Opening Timestamp:\s*([^|]+)/)?.[1]?.trim();
+    const openedAtTime = openedAtValue ? Date.parse(openedAtValue) : Number.NaN;
+
+    if (!ticketNumber || !creatorId || !type || Number.isNaN(openedAtTime)) return null;
+
+    return {
+      ticketNumber,
+      creatorId,
+      type,
+      priority,
+      reason: topic.match(/(?:^|\|\s*)Opening Reason:\s*([^|]+)/)?.[1]?.trim() || "Unavailable after bot restart.",
+      openedAt: new Date(openedAtTime),
+    };
+  }
+
+  private ticketTypeFromTopic(value: string | undefined): TicketType | null {
+    const ticketTypes: TicketType[] = ["Support", "Report", "Player Report", "Appeal", "Help", "Builder", "Media"];
+    return ticketTypes.find(type => type === value) ?? null;
   }
 
   private async sendTicketLog(
@@ -621,7 +683,8 @@ export class TicketService {
   }
 
   private isStaff(member: unknown) {
-    return member instanceof GuildMember && member.roles.cache.has(config.staffRoleId);
+    return member instanceof GuildMember &&
+      (member.permissions.has(PermissionFlagsBits.Administrator) || member.roles.cache.has(config.staffRoleId));
   }
 
   private async countdownAndDelete(channel: TextChannel) {

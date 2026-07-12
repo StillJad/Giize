@@ -41,6 +41,7 @@ type ApplicationRow = {
   priority: EventApplicationPriority;
   reviewed_by: string | null;
   reviewed_at: number | null;
+  application_channel_id: string | null;
   created_at: number;
 };
 
@@ -310,6 +311,9 @@ export class EventApplicationService {
       embeds: [eventApplicationRenderer.renderTicketEmbed(event, application, autoAccepted ? "automatic" : "manual")],
       components: autoAccepted ? [] : eventApplicationRenderer.renderReviewComponents(application.id, false),
     });
+
+    sqlite.prepare("UPDATE event_applications SET application_channel_id = ? WHERE id = ?")
+      .run(channel.id, application.id);
   }
 
   private async logApplication(guild: Guild, event: EventRecord, application: EventApplicationRecord, action: string, reviewerId: string | null, automatic: boolean) {

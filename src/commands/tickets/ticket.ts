@@ -2,6 +2,7 @@ import { SlashCommandBuilder } from "discord.js";
 import { ticketService } from "../../services/tickets/TicketService.js";
 import type { TicketType } from "../../services/tickets/TicketRenderer.js";
 import type { Command } from "../../types/Command.js";
+import { logger } from "../../utils/logger.js";
 
 const ticketTypes: TicketType[] = ["Support", "Report", "Appeal", "Builder", "Media"];
 
@@ -32,12 +33,31 @@ export const command: Command = {
   async execute(interaction) {
     const subcommand = interaction.options.getSubcommand();
 
-    if (subcommand === "open") {
-      await ticketService.open(
-        interaction,
-        interaction.options.getString("type", true) as TicketType,
-        interaction.options.getString("reason", true)
-      );
+    try {
+      if (subcommand === "open") {
+        await ticketService.open(
+          interaction,
+          interaction.options.getString("type", true) as TicketType,
+          interaction.options.getString("reason", true)
+        );
+      }
+    } catch (error) {
+      logger.error("Ticket command failed.", error, {
+        type: "command",
+        name: JSON.stringify({
+          command: "ticket",
+          subcommand,
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          channelMetadataFound: ticketService.hasStandardTicketMetadata(interaction.channel),
+        }),
+      });
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply("Something went wrong. Please try again.").catch(() => {});
+      } else {
+        await interaction.reply({ content: "Something went wrong. Please try again.", flags: 64 }).catch(() => {});
+      }
     }
   },
 };

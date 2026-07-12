@@ -225,6 +225,8 @@ export class EventService {
 
     await this.removeGoingRoleFromAssignedMembers(interaction.guild, event);
     await this.deleteEventMessage(interaction.client, event);
+    await this.deleteApplicationTicketChannels(interaction.guild, event.id);
+    sqlite.prepare("DELETE FROM event_applications WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM event_participants WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM event_reminders WHERE event_id = ?").run(event.id);
@@ -567,6 +569,35 @@ export class EventService {
   private async deleteEventMessage(client: Client, event: EventRecord) {
     const message = await this.fetchEventMessage(client, event);
     await message?.delete().catch(() => {});
+  }
+
+  private async deleteApplicationTicketChannels(guild: Guild, eventId: number) {
+    const rows = sqlite
+      .prepare(`
+        SELECT application_channel_id AS channelId
+        FROM event_applications
+        WHERE event_id = ? AND application_channel_id IS NOT NULL
+      `)
+      .all(eventId) as { channelId: string }[];
+
+    for (const row of rows) {
+      const channel = await guild.channels.fetch(row.channelId).catch(error => {
+        if (this.isUnknownChannelError(error)) return null;
+        logger.warn(`Failed to fetch event application channel ${row.channelId}. Continuing event deletion.`, error);
+        return null;
+      });
+
+      if (!channel || !("delete" in channel)) continue;
+
+      await channel.delete("Event deleted").catch(error => {
+        if (this.isUnknownChannelError(error)) return;
+        logger.warn(`Failed to delete event application channel ${row.channelId}. Continuing event deletion.`, error);
+      });
+    }
+  }
+
+  private isUnknownChannelError(error: unknown) {
+    return typeof error === "object" && error !== null && "code" in error && error.code === 10003;
   }
 
   private async fetchEventMessage(client: Client, event: EventRecord) {

@@ -9,6 +9,8 @@ import {
 } from "discord.js";
 import { giizeEmbed } from "../../utils/embeds.js";
 import type { Command } from "../../types/Command.js";
+import { ticketService } from "../../services/tickets/TicketService.js";
+import { logger } from "../../utils/logger.js";
 
 const developerRoleId = "1518110330377736323";
 
@@ -55,56 +57,77 @@ export const command: Command = {
     ),
 
   async execute(interaction) {
-    if (!interaction.inGuild() || !canCreateTicketPanel(interaction.member)) {
+    const subcommand = interaction.options.getSubcommand();
+
+    try {
+      if (!interaction.inGuild() || !canCreateTicketPanel(interaction.member)) {
+        await interaction.reply({
+          content: "You don't have permission to create ticket panels.",
+          flags: 64,
+        });
+        return;
+      }
+
+      const channel = interaction.options.getChannel("channel", true) as TextChannel;
+      const title = interaction.options.getString("title") ?? "Ticket 🎟️";
+      const description = interaction.options.getString("description") ?? "Select a ticket type below!";
+
+      await channel.send({
+        embeds: [
+          giizeEmbed()
+            .setTitle(title)
+            .setDescription(description),
+        ],
+        components: [
+          new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+            new StringSelectMenuBuilder()
+              .setCustomId("ticket_panel_select")
+              .setPlaceholder("Make a selection")
+              .addOptions(
+                {
+                  label: "Support",
+                  description: "Get help from the staff team.",
+                  emoji: "🎫",
+                  value: "support",
+                },
+                {
+                  label: "Player Report",
+                  description: "Report a player or rule violation.",
+                  emoji: "🚨",
+                  value: "report",
+                },
+                {
+                  label: "Help",
+                  description: "General questions or other assistance.",
+                  emoji: "❓",
+                  value: "help",
+                }
+              )
+          ),
+        ],
+      });
+
       await interaction.reply({
-        content: "You don't have permission to create ticket panels.",
+        content: "Ticket panel sent successfully.",
         flags: 64,
       });
-      return;
+    } catch (error) {
+      logger.error("Ticket command failed.", error, {
+        type: "command",
+        name: JSON.stringify({
+          command: "ticketpanel",
+          subcommand,
+          userId: interaction.user.id,
+          channelId: interaction.channelId,
+          channelMetadataFound: ticketService.hasStandardTicketMetadata(interaction.channel),
+        }),
+      });
+
+      if (interaction.replied || interaction.deferred) {
+        await interaction.editReply("Something went wrong. Please try again.").catch(() => {});
+      } else {
+        await interaction.reply({ content: "Something went wrong. Please try again.", flags: 64 }).catch(() => {});
+      }
     }
-
-    const channel = interaction.options.getChannel("channel", true) as TextChannel;
-    const title = interaction.options.getString("title") ?? "Ticket 🎟️";
-    const description = interaction.options.getString("description") ?? "Select a ticket type below!";
-
-    await channel.send({
-      embeds: [
-        giizeEmbed()
-          .setTitle(title)
-          .setDescription(description),
-      ],
-      components: [
-        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
-          new StringSelectMenuBuilder()
-            .setCustomId("ticket_panel_select")
-            .setPlaceholder("Make a selection")
-            .addOptions(
-              {
-                label: "Support",
-                description: "Get help from the staff team.",
-                emoji: "🎫",
-                value: "support",
-              },
-              {
-                label: "Player Report",
-                description: "Report a player or rule violation.",
-                emoji: "🚨",
-                value: "report",
-              },
-              {
-                label: "Help",
-                description: "General questions or other assistance.",
-                emoji: "❓",
-                value: "help",
-              }
-            )
-        ),
-      ],
-    });
-
-    await interaction.reply({
-      content: "Ticket panel sent successfully.",
-      flags: 64,
-    });
   },
 };
