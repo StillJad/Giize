@@ -13,6 +13,17 @@ export type StoredMinecraftAccounts = {
   bedrockUsername: string | null;
 };
 
+export type BedrockValidationResult =
+  | {
+      valid: true;
+      cleanUsername: string;
+      nickname: string;
+    }
+  | {
+      valid: false;
+      reason: "empty" | "unsupported_symbols" | "too_long";
+    };
+
 type VerifiedPlayerRow = {
   java_username: string | null;
   java_uuid: string | null;
@@ -27,17 +38,51 @@ export class VerificationService {
   static normalizeUsername(username: string, platform: "java" | "bedrock") {
     username = username.trim();
 
-    if (platform === "bedrock" && !username.startsWith(".")) {
-      username = "." + username;
+    if (platform === "bedrock") {
+      return this.normalizeBedrockNickname(username);
     }
 
     return username;
+  }
+
+  static validateBedrockUsername(username: string): BedrockValidationResult {
+    const cleanUsername = username.trim().replace(/^\.+/, "").trim();
+
+    if (!cleanUsername) {
+      return { valid: false, reason: "empty" };
+    }
+
+    if (cleanUsername.length > 15) {
+      return { valid: false, reason: "too_long" };
+    }
+
+    if (!/^[A-Za-z0-9 _-]+$/.test(cleanUsername)) {
+      return { valid: false, reason: "unsupported_symbols" };
+    }
+
+    return {
+      valid: true,
+      cleanUsername,
+      nickname: this.normalizeBedrockNickname(cleanUsername),
+    };
+  }
+
+  static normalizeBedrockNickname(username: string) {
+    const cleanUsername = username.trim().replace(/^\.+/, "").trim();
+    return `.${cleanUsername}`;
   }
 
   static failureEmbed() {
     return giizeEmbed()
       .setTitle("Verification Failed")
       .setDescription("That Minecraft username could not be found.\n\nPlease double-check the spelling and try again.")
+      .setFooter({ text: "Giize Events Verification System" });
+  }
+
+  static bedrockFailureEmbed() {
+    return giizeEmbed()
+      .setTitle("Verification Failed")
+      .setDescription("That Bedrock gamertag format is invalid.\n\nPlease double-check the spelling and try again.")
       .setFooter({ text: "Giize Events Verification System" });
   }
 
@@ -74,28 +119,22 @@ export class VerificationService {
       .prepare("UPDATE verified_players SET guild_id = ? WHERE discord_id = ? AND guild_id IS NULL")
       .run(guild.id, member.id);
 
-    sqlite.prepare(`
-      INSERT INTO verified_players (
-        guild_id, discord_id, java_username, java_uuid, bedrock_username,
-        verified_java_at, verified_bedrock_at, minecraft_uuid, minecraft_username,
-        platform, verified, verified_at, created_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-      ON CONFLICT(guild_id, discord_id) DO UPDATE SET
-        guild_id = excluded.guild_id,
-        java_username = COALESCE(excluded.java_username, verified_players.java_username),
-        java_uuid = COALESCE(excluded.java_uuid, verified_players.java_uuid),
-        bedrock_username = COALESCE(excluded.bedrock_username, verified_players.bedrock_username),
-        verified_java_at = COALESCE(excluded.verified_java_at, verified_players.verified_java_at),
-        verified_bedrock_at = COALESCE(excluded.verified_bedrock_at, verified_players.verified_bedrock_at),
-        minecraft_uuid = excluded.minecraft_uuid,
-        minecraft_username = excluded.minecraft_username,
-        platform = excluded.platform,
-        verified = 1,
-        verified_at = excluded.verified_at
+    const update = sqlite.prepare(`
+      UPDATE verified_players
+      SET guild_id = ?,
+          java_username = ?,
+          java_uuid = ?,
+          bedrock_username = ?,
+          verified_java_at = COALESCE(?, verified_java_at),
+          verified_bedrock_at = COALESCE(?, verified_bedrock_at),
+          minecraft_uuid = ?,
+          minecraft_username = ?,
+          platform = ?,
+          verified = 1,
+          verified_at = ?
+      WHERE discord_id = ? AND guild_id = ?
     `).run(
       guild.id,
-      member.id,
       nextJavaUsername,
       nextJavaUuid,
       nextBedrockUsername,
@@ -105,11 +144,39 @@ export class VerificationService {
       username,
       platform,
       now,
-      now
+      member.id,
+      guild.id
     );
 
+    if (update.changes === 0) {
+      sqlite.prepare(`
+        INSERT INTO verified_players (
+          guild_id, discord_id, java_username, java_uuid, bedrock_username,
+          verified_java_at, verified_bedrock_at, minecraft_uuid, minecraft_username,
+          platform, verified, verified_at, created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      `).run(
+        guild.id,
+        member.id,
+        nextJavaUsername,
+        nextJavaUuid,
+        nextBedrockUsername,
+        platform === "java" ? now : null,
+        platform === "bedrock" ? now : null,
+        platform === "java" ? javaUuid : nextJavaUuid,
+        username,
+        platform,
+        now,
+        now
+      );
+    }
+
     const stored = this.getStoredAccounts(guild.id, member.id);
-    const nickname = stored.javaUsername ?? stored.bedrockUsername ?? member.nickname ?? member.user.username;
+    const nickname = stored.javaUsername
+      ?? (stored.bedrockUsername ? VerificationService.normalizeBedrockNickname(stored.bedrockUsername) : null)
+      ?? member.nickname
+      ?? member.user.username;
 
     if (member.manageable && nickname !== member.nickname) {
       await member.setNickname(nickname, "Verified via /verify").catch(error =>

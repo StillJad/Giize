@@ -30,6 +30,14 @@ function canManageTickets(interaction: ButtonInteraction): boolean {
   );
 }
 
+function decodeVerificationUsername(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
@@ -83,10 +91,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     const platform = hasPlatformPayload && verificationParts[0] === "bedrock" ? "bedrock" : "java";
     const platformLabel = platform === "java" ? "Java" : "Bedrock";
     const hasUuidPayload = hasPlatformPayload && verificationParts.length >= 3;
-    const javaUuid = hasUuidPayload && platform === "java" ? verificationParts[1] || null : null;
-    const username = hasPlatformPayload
+    const javaUuid = hasUuidPayload && platform === "java" && verificationParts[1] !== "none" ? verificationParts[1] || null : null;
+    const encodedUsername = hasPlatformPayload
       ? verificationParts.slice(hasUuidPayload ? 2 : 1).join(":")
       : verificationPayload;
+    const username = decodeVerificationUsername(encodedUsername);
 
     if (!username) {
       await safeReply(interaction, {

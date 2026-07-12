@@ -19,7 +19,7 @@ import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
 import { safeEdit, safeReply } from "./interactionResponses.js";
-import { ticketRenderer, type TicketType } from "./TicketRenderer.js";
+import { ticketRenderer, type TicketPriority, type TicketType } from "./TicketRenderer.js";
 import { transcriptService } from "./TranscriptService.js";
 
 type ActiveTicket = {
@@ -27,6 +27,7 @@ type ActiveTicket = {
   creatorId: string;
   creatorTag: string;
   type: TicketType;
+  priority: TicketPriority;
   reason: string;
   openedAt: Date;
 };
@@ -62,6 +63,10 @@ export class TicketService {
 
     try {
       const botMember = guild.members.me ?? (await guild.members.fetchMe());
+      const member = interaction.member instanceof GuildMember
+        ? interaction.member
+        : await guild.members.fetch(userId);
+      const priority = this.determineTicketPriority(member);
       const channelName = this.nextTicketChannelName(guild, interaction.user.username);
       const openedAt = new Date();
       const ticketNumber = this.claimNextTicketNumber();
@@ -116,6 +121,7 @@ export class TicketService {
           `Ticket ${ticketNumber}`,
           `Creator ID: ${userId}`,
           `Ticket Type: ${type}`,
+          `Priority: ${priority}`,
           `Opening Timestamp: ${openedAt.toISOString()}`,
         ].join(" | "),
         permissionOverwrites,
@@ -127,6 +133,7 @@ export class TicketService {
         creatorId: userId,
         creatorTag: interaction.user.tag,
         type,
+        priority,
         reason,
         openedAt,
       });
@@ -138,6 +145,7 @@ export class TicketService {
             ticketNumber,
             openedBy: interaction.user,
             type,
+            priority,
             reason,
             openedAt,
           }),
@@ -284,6 +292,7 @@ export class TicketService {
       ticketCreator: ticket.creatorTag,
       ticketCreatorId: ticket.creatorId,
       type: ticket.type,
+      priority: ticket.priority,
       openedAt: ticket.openedAt,
       closedAt,
       duration,
@@ -299,6 +308,7 @@ export class TicketService {
       creatorId: ticket.creatorId,
       closedBy: interaction.user,
       type: ticket.type,
+      priority: ticket.priority,
       openingReason: ticket.reason,
       closingReason,
       openedAt: ticket.openedAt,
@@ -484,11 +494,67 @@ export class TicketService {
     const textChannels = guild.channels.cache.filter(channel => channel.type === ChannelType.GuildText);
 
     if (!config.ticketCategoryId) {
-      return textChannels;
+      return this.sortTicketChannels([...textChannels.values()]);
     }
 
     const categoryChannels = textChannels.filter(channel => channel.parentId === config.ticketCategoryId);
-    return categoryChannels.size > 0 ? categoryChannels : textChannels;
+    return this.sortTicketChannels([...(categoryChannels.size > 0 ? categoryChannels : textChannels).values()]);
+  }
+
+  private determineTicketPriority(member: GuildMember): TicketPriority {
+    if (config.diamondSupporterRoleId && member.roles.cache.has(config.diamondSupporterRoleId)) {
+      return "Diamond";
+    }
+
+    if (config.ironSupporterRoleId && member.roles.cache.has(config.ironSupporterRoleId)) {
+      return "Iron";
+    }
+
+    if (config.dirtSupporterRoleId && member.roles.cache.has(config.dirtSupporterRoleId)) {
+      return "Dirt";
+    }
+
+    return "Normal";
+  }
+
+  private sortTicketChannels(channels: TextChannel[]) {
+    return channels.sort((left, right) => {
+      const priorityDifference = this.priorityRank(this.priorityFromTopic(left.topic)) -
+        this.priorityRank(this.priorityFromTopic(right.topic));
+
+      if (priorityDifference !== 0) return priorityDifference;
+
+      return this.openedAtFromTopic(left.topic) - this.openedAtFromTopic(right.topic);
+    });
+  }
+
+  private priorityFromTopic(topic: string | null): TicketPriority {
+    const match = topic?.match(/(?:^|\|\s*)Priority:\s*(Diamond|Iron|Dirt|Normal)/i);
+    const value = match?.[1]?.toLowerCase();
+
+    if (value === "diamond") return "Diamond";
+    if (value === "iron") return "Iron";
+    if (value === "dirt") return "Dirt";
+    return "Normal";
+  }
+
+  private priorityRank(priority: TicketPriority) {
+    switch (priority) {
+      case "Diamond":
+        return 0;
+      case "Iron":
+        return 1;
+      case "Dirt":
+        return 2;
+      case "Normal":
+        return 3;
+    }
+  }
+
+  private openedAtFromTopic(topic: string | null) {
+    const match = topic?.match(/Opening Timestamp:\s*([^|]+)/);
+    const timestamp = match?.[1] ? Date.parse(match[1].trim()) : Number.NaN;
+    return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
   }
 
   private claimNextTicketNumber() {

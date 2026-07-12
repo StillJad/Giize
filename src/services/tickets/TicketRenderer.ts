@@ -2,11 +2,13 @@ import type { User } from "discord.js";
 import { giizeEmbed } from "../../utils/embeds.js";
 
 export type TicketType = "Support" | "Report" | "Player Report" | "Appeal" | "Help" | "Builder" | "Media";
+export type TicketPriority = "Diamond" | "Iron" | "Dirt" | "Normal";
 
 export type TicketWelcome = {
   ticketNumber: string;
   openedBy: User;
   type: TicketType;
+  priority: TicketPriority;
   reason: string;
   openedAt: Date;
 };
@@ -18,6 +20,7 @@ export type TicketCloseLog = {
   creatorId: string;
   closedBy: User;
   type: TicketType;
+  priority: TicketPriority;
   openingReason: string;
   closingReason: string;
   openedAt: Date;
@@ -33,6 +36,7 @@ export class TicketRenderer {
         { name: "Ticket", value: ticket.ticketNumber, inline: true },
         { name: "Opened by", value: `${ticket.openedBy}`, inline: true },
         { name: "Type", value: ticket.type, inline: true },
+        { name: "Priority", value: this.priorityLabel(ticket.priority), inline: true },
         { name: "Reason", value: ticket.reason, inline: false },
         {
           name: "Opened at",
@@ -51,6 +55,7 @@ export class TicketRenderer {
         { name: "Opened By", value: ticket.openedBy, inline: true },
         { name: "Closed By", value: `${ticket.closedBy}`, inline: true },
         { name: "Ticket Type", value: ticket.type, inline: true },
+        { name: "Priority", value: this.priorityLabel(ticket.priority), inline: true },
         {
           name: "Opened",
           value: `<t:${Math.floor(ticket.openedAt.getTime() / 1000)}:F>`,
@@ -76,9 +81,23 @@ export class TicketRenderer {
       .addFields(
         { name: "Ticket #", value: ticket.ticketNumber, inline: true },
         { name: "Closed By", value: `${ticket.closedBy}`, inline: true },
+        { name: "Priority", value: this.priorityLabel(ticket.priority), inline: true },
         { name: "Reason", value: ticket.closingReason, inline: false },
         { name: "Duration", value: ticket.duration, inline: true }
       );
+  }
+
+  private priorityLabel(priority: TicketPriority) {
+    switch (priority) {
+      case "Diamond":
+        return "💎 Diamond";
+      case "Iron":
+        return "🥇 Iron";
+      case "Dirt":
+        return "🥉 Dirt";
+      case "Normal":
+        return "Normal";
+    }
   }
 }
 

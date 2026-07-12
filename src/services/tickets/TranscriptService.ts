@@ -5,7 +5,7 @@ import {
 } from "discord.js";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { TicketType } from "./TicketRenderer.js";
+import type { TicketPriority, TicketType } from "./TicketRenderer.js";
 
 export type TranscriptMetadata = {
   serverName: string;
@@ -15,6 +15,7 @@ export type TranscriptMetadata = {
   ticketCreator: string;
   ticketCreatorId: string;
   type: TicketType;
+  priority: TicketPriority;
   openedAt: Date;
   closedAt: Date;
   duration: string;
@@ -83,6 +84,7 @@ export class TranscriptService {
       `Opened By: ${metadata.ticketCreator} (${metadata.ticketCreatorId})`,
       `Closed By: ${metadata.closedBy} (${metadata.closedById})`,
       `Ticket Type: ${metadata.type}`,
+      `Priority: ${metadata.priority}`,
       `Opened At: ${this.formatDateTime(metadata.openedAt)}`,
       `Closed At: ${this.formatDateTime(metadata.closedAt)}`,
       `Duration: ${metadata.duration}`,
