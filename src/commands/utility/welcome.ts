@@ -72,6 +72,11 @@ export const command: Command = {
       subcommand
         .setName("enable")
         .setDescription("Enable welcome messages for this server.")
+    )
+    .addSubcommand(subcommand =>
+      subcommand
+        .setName("refresh")
+        .setDescription("Refresh the saved welcome message wording.")
     ),
 
   async execute(interaction) {
@@ -127,6 +132,12 @@ export const command: Command = {
     if (subcommand === "enable") {
       await welcomeService.enable(interaction.guild.id);
       await interaction.reply({ content: "Welcome messages are now enabled.", flags: 64 });
+      return;
+    }
+
+    if (subcommand === "refresh") {
+      await welcomeService.refreshWording(interaction.guild.id);
+      await interaction.reply({ content: "Welcome message wording refreshed.", flags: 64 });
     }
   },
 };

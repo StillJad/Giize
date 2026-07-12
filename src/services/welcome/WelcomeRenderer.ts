@@ -4,24 +4,27 @@ import { giizeEmbed } from "../../utils/embeds.js";
 
 type PlaceholderTarget = GuildMember | User;
 
+export const welcomeTitle = "Welcome, {username}! 👋";
+export const welcomeDescription = `We're glad you're here!
+
+Here's everything you need to get started:
+
+📋 {rules}
+❓ {about}
+🎭 {roles}
+⚔️ {bedrock}
+📢 {announcements}
+💎 {ip}
+
+You're member #{membercount} of Giize Events.
+
+Enjoy your stay!`;
+
 export class WelcomeRenderer {
   render(target: PlaceholderTarget) {
     const embed = giizeEmbed()
-      .setTitle(this.replacePlaceholders("Welcome {username} to Giize Events!", target))
-      .setDescription(this.replacePlaceholders(
-`Welcome {mention} to Giize Events!
-There are now {membercount} members.
-
-Useful Channels:
-
-📋 {rules_channel}
-❓ {about_channel}
-🎭 {roles_channel}
-⚔️ {bedrock_channel}
-📢 {announcements_channel}
-💎 {ip_channel}`,
-        target
-      ));
+      .setTitle(this.replacePlaceholders(welcomeTitle, target))
+      .setDescription(this.replacePlaceholders(welcomeDescription, target));
 
     if (config.welcomeBannerUrl) {
       embed.setImage(config.welcomeBannerUrl);
@@ -40,6 +43,12 @@ Useful Channels:
       .replaceAll("{mention}", `${user}`)
       .replaceAll("{server}", guild?.name ?? "this server")
       .replaceAll("{membercount}", String(guild?.memberCount ?? 0))
+      .replaceAll("{rules}", this.channelMention(config.rulesChannelId))
+      .replaceAll("{about}", this.channelMention(config.aboutChannelId))
+      .replaceAll("{roles}", this.channelMention(config.rolesChannelId))
+      .replaceAll("{bedrock}", this.channelMention(config.bedrockChannelId))
+      .replaceAll("{announcements}", this.channelMention(config.announcementsChannelId))
+      .replaceAll("{ip}", this.channelMention(config.ipChannelId))
       .replaceAll("{rules_channel}", this.channelMention(config.rulesChannelId))
       .replaceAll("{about_channel}", this.channelMention(config.aboutChannelId))
       .replaceAll("{roles_channel}", this.channelMention(config.rolesChannelId))

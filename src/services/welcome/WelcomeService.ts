@@ -4,7 +4,7 @@ import { config } from "../../config/config.js";
 import { db } from "../../database/database.js";
 import { welcomeConfigs } from "../../database/schema.js";
 import { logger } from "../../utils/logger.js";
-import { welcomeRenderer } from "./WelcomeRenderer.js";
+import { welcomeDescription, welcomeRenderer, welcomeTitle } from "./WelcomeRenderer.js";
 
 export type WelcomeConfig = {
   guildId: string;
@@ -96,8 +96,8 @@ export class WelcomeService {
         guildId,
         enabled: 1,
         channelId: config.welcomeChannelId,
-        title: "Welcome {username} to Giize Events!",
-        description: "Welcome {mention} to Giize Events!",
+        title: welcomeTitle,
+        description: welcomeDescription,
         roleId: null,
         imageUrl: null,
         thumbnailUrl: null,
@@ -111,6 +111,37 @@ export class WelcomeService {
     await db
       .update(welcomeConfigs)
       .set({ enabled: 1, updatedAt: Date.now() })
+      .where(eq(welcomeConfigs.guildId, guildId));
+  }
+
+  async refreshWording(guildId: string) {
+    const existingConfig = await this.getConfig(guildId);
+    const now = Date.now();
+
+    if (!existingConfig) {
+      await db.insert(welcomeConfigs).values({
+        guildId,
+        enabled: 1,
+        channelId: config.welcomeChannelId,
+        title: welcomeTitle,
+        description: welcomeDescription,
+        roleId: null,
+        imageUrl: null,
+        thumbnailUrl: null,
+        color: null,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return;
+    }
+
+    await db
+      .update(welcomeConfigs)
+      .set({
+        title: welcomeTitle,
+        description: welcomeDescription,
+        updatedAt: now,
+      })
       .where(eq(welcomeConfigs.guildId, guildId));
   }
 
