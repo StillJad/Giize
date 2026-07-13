@@ -27,5 +27,9 @@ export const config = {
   announcementsChannelId: process.env.ANNOUNCEMENTS_CHANNEL_ID ?? "",
   ipChannelId: process.env.IP_CHANNEL_ID ?? "",
   mcHost: process.env.SERVER_IP ?? process.env.MC_HOST ?? "Crafter.Giize.Events",
-  mcPort: Number(process.env.SERVER_PORT ?? process.env.MC_PORT ?? 50349)
+  mcPort: Number(process.env.SERVER_PORT ?? process.env.MC_PORT ?? 50349),
+  dashboardInternalSecret: process.env.DASHBOARD_INTERNAL_SECRET ?? "",
+  dashboardGuildId: process.env.DASHBOARD_GUILD_ID ?? process.env.GUILD_ID ?? "1513902863657603203",
+  dashboardApiPort: Number(process.env.DASHBOARD_API_PORT ?? 3001),
+  dashboardDeveloperRoleId: process.env.DEVELOPER_ROLE_ID ?? "1518110330377736323"
 };

@@ -1,6 +1,6 @@
 # Giize Bot
 
-Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Minecraft server utilities, event RSVP panels, tickets, welcome messages, and Minecraft account verification.
+Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Minecraft server utilities, event applications, tickets, welcome messages, Minecraft account verification, AutoMod, audit logs, and a private web dashboard.
 
 ## Features
 
@@ -12,6 +12,7 @@ Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Mine
 - Configurable AutoMod for spam, duplicate messages, mentions, emojis, invites, links, banned words, and excessive caps.
 - Minecraft server IP and status commands.
 - SQLite persistence for events, participants, welcome settings, tickets, and counters.
+- Web dashboard with Discord OAuth, server overview, welcome/ticket/event/AutoMod/logging settings, and bot health.
 
 ## Installation
 
@@ -44,6 +45,54 @@ docker compose down
 ```
 
 The SQLite database is stored in `./data` on the host and mounted to `/app/data` in the container.
+
+The dashboard runs as `giize-dashboard` and talks to the bot over the private Compose network at `http://giize-bot:3001`. The bot API is not published directly to the host.
+
+Dashboard commands:
+
+```bash
+npm run dashboard:dev
+npm run dashboard:build
+npm run dashboard:start
+```
+
+For local OAuth development, use:
+
+```text
+http://localhost:3000/api/auth/callback/discord
+```
+
+### Nginx Dashboard Example
+
+Create a separate Nginx site for your dashboard domain. Do not overwrite existing Cockpit or VPS configuration.
+
+```nginx
+server {
+    listen 80;
+    server_name dashboard.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name dashboard.example.com;
+
+    ssl_certificate /etc/letsencrypt/live/dashboard.example.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/dashboard.example.com/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
 
 ## Required Intents
 
@@ -110,6 +159,15 @@ Production configuration:
 - `IP_CHANNEL_ID`
 - `SERVER_IP`
 - `SERVER_PORT`
+- `DISCORD_CLIENT_ID`
+- `DISCORD_CLIENT_SECRET`
+- `DISCORD_REDIRECT_URI`
+- `DASHBOARD_SESSION_SECRET`
+- `DASHBOARD_INTERNAL_SECRET`
+- `DASHBOARD_GUILD_ID`
+- `NEXT_PUBLIC_DASHBOARD_URL`
+- `DASHBOARD_HOST_PORT`
+- `DASHBOARD_API_PORT`
 
 Legacy aliases still supported:
 
@@ -159,7 +217,6 @@ Verification:
 - `/verify`
 - `/unverify`
 - `/verification setup`
-- `/verification test`
 
 Admin:
 
@@ -174,6 +231,19 @@ Admin:
 - `/automod domain allow`
 - `/automod domain remove`
 - `/automod domain list`
+- `/moderation`
+- `/channel`
+- `/purge`
+
+Dashboard:
+
+- Overview
+- Welcome
+- Tickets
+- Events
+- AutoMod
+- Logging
+- Bot Health
 
 ## Screenshots
 

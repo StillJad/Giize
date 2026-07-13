@@ -10,6 +10,7 @@ import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";
 import "./handlers/SelectMenuHandler.js";
 import "./handlers/WelcomeHandler.js";
+import { DashboardApiServer } from "./dashboard-api/DashboardApiServer.js";
 import { reminderService } from "./services/events/ReminderService.js";
 import { logger } from "./utils/logger.js";
 
@@ -26,6 +27,7 @@ logger.info("✓ Loaded AutoMod");
 client.once(Events.ClientReady, ready => {
   logger.info(`✓ Logged in as ${ready.user.tag}`);
   reminderService.start(client);
+  new DashboardApiServer(client).start();
 });
 
 client.on("error", error => {

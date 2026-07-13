@@ -1,4 +1,6 @@
 node_modules
+apps/dashboard/node_modules
+apps/dashboard/.next
 dist
 .git
 .env
