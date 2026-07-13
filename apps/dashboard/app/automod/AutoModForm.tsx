@@ -9,6 +9,7 @@ type AutoModData = {
   exemptRoles: { role_id: string }[];
   exemptChannels: { channel_id: string }[];
   channels: { id: string; name: string }[];
+  roles: { id: string; name: string }[];
 };
 
 function checked(config: Record<string, string | number | null>, key: string, fallback = true) {
@@ -18,6 +19,8 @@ function checked(config: Record<string, string | number | null>, key: string, fa
 
 export function AutoModForm({ data }: { data: AutoModData }) {
   const config = data.config ?? {};
+  const roleName = new Map(data.roles.map(role => [role.id, role.name]));
+  const channelName = new Map(data.channels.map(channel => [channel.id, `#${channel.name}`]));
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -33,7 +36,6 @@ export function AutoModForm({ data }: { data: AutoModData }) {
           duplicateEnabled: formData.get("duplicateEnabled") === "on",
           mentionLimit: Number(formData.get("mentionLimit")),
           emojiLimit: Number(formData.get("emojiLimit")),
-          capsPercentage: Number(formData.get("capsPercentage")),
           inviteLinksEnabled: formData.get("inviteLinksEnabled") === "on",
           externalLinksEnabled: formData.get("externalLinksEnabled") === "on",
           timeoutMinutes: Number(formData.get("timeoutMinutes")),
@@ -73,27 +75,50 @@ export function AutoModForm({ data }: { data: AutoModData }) {
           <div className="row">
             <label><span>Mention limit</span><input name="mentionLimit" type="number" min={0} max={20} defaultValue={Number(config.mention_limit ?? 5)} /></label>
             <label><span>Emoji limit</span><input name="emojiLimit" type="number" min={0} max={50} defaultValue={Number(config.emoji_limit ?? 12)} /></label>
-            <label><span>Caps percentage</span><input name="capsPercentage" type="number" min={0} max={100} defaultValue={Number(config.caps_percentage ?? 80)} /></label>
             <label><span>Timeout minutes</span><input name="timeoutMinutes" type="number" min={0} max={1440} defaultValue={Number(config.timeout_minutes ?? 10)} /></label>
           </div>
           <label><span>Log channel</span><select name="logChannelId" defaultValue={String(config.log_channel_id ?? "")}><option value="">Use audit default</option>{data.channels.map(channel => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
         </section>
       </form>
       <div className="grid" style={{ marginTop: "1rem" }}>
-        <ListCard title="Banned Words" items={data.bannedWords.map(word => `${word.word} (${word.match_type})`)} />
-        <ListCard title="Allowed Domains" items={data.allowedDomains.map(domain => domain.domain)} />
-        <ListCard title="Exempt Roles" items={data.exemptRoles.map(role => role.role_id)} />
-        <ListCard title="Exempt Channels" items={data.exemptChannels.map(channel => channel.channel_id)} />
+        <ManageList title="Banned Words" items={data.bannedWords.map(word => `${word.word} (${word.match_type})`)} fields={[["word", "Word"], ["matchType", "exact or contains"]]} endpoint="word" />
+        <ManageList title="Allowed Domains" items={data.allowedDomains.map(domain => domain.domain)} fields={[["domain", "Domain"]]} endpoint="domain" />
+        <ManageList title="Exempt Roles" items={data.exemptRoles.map(role => roleName.get(role.role_id) ?? "Missing role")} fields={[["roleId", "Role ID"]]} endpoint="exempt-role" />
+        <ManageList title="Exempt Channels" items={data.exemptChannels.map(channel => channelName.get(channel.channel_id) ?? "Missing channel")} fields={[["channelId", "Channel ID"]]} endpoint="exempt-channel" />
       </div>
     </>
   );
 }
 
-function ListCard({ title, items }: { title: string; items: string[] }) {
+function ManageList({ title, items, fields, endpoint }: { title: string; items: string[]; fields: [string, string][]; endpoint: string }) {
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState("");
+
+  function mutate(formData: FormData, action: "add" | "remove") {
+    startTransition(async () => {
+      const payload = Object.fromEntries(formData);
+      const response = await fetch(`/api/dashboard/automod/${endpoint}-${action}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      setMessage(response.ok ? "Saved." : "Changes could not be saved. Please try again.");
+    });
+  }
+
   return (
     <section className="card compact">
       <h2>{title}</h2>
       {items.length > 0 ? <ul className="clean-list">{items.map(item => <li key={item}>{item}</li>)}</ul> : <p className="empty">Nothing configured.</p>}
+      <form className="form" action={formData => mutate(formData, "add")} style={{ marginTop: "0.75rem" }}>
+        {fields.map(([name, label]) => <input key={name} name={name} placeholder={label} />)}
+        <button disabled={pending}>Add</button>
+      </form>
+      <form className="form" action={formData => mutate(formData, "remove")} style={{ marginTop: "0.5rem" }}>
+        <input name={fields[0][0]} placeholder={`Remove ${fields[0][1]}`} />
+        <button className="secondary" disabled={pending}>Remove</button>
+      </form>
+      {message ? <p className="muted">{message}</p> : null}
     </section>
   );
 }

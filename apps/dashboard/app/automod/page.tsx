@@ -9,6 +9,7 @@ export default async function AutoModPage() {
     exemptRoles: { role_id: string }[];
     exemptChannels: { channel_id: string }[];
     channels: { id: string; name: string }[];
+    roles: { id: string; name: string }[];
   }>("/automod");
 
   return (

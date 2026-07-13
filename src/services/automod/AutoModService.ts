@@ -24,8 +24,7 @@ export type AutoModRule =
   | "Excessive Emojis"
   | "Invite Link"
   | "Suspicious Link"
-  | "Banned Word"
-  | "Excessive Caps";
+  | "Banned Word";
 
 export type AutoModConfig = {
   guildId: string;
@@ -34,7 +33,6 @@ export type AutoModConfig = {
   duplicateEnabled: boolean;
   mentionLimit: number;
   emojiLimit: number;
-  capsPercentage: number;
   inviteLinksEnabled: boolean;
   externalLinksEnabled: boolean;
   timeoutMinutes: number;
@@ -65,7 +63,6 @@ type AutoModConfigRow = {
   duplicate_enabled: number;
   mention_limit: number;
   emoji_limit: number;
-  caps_percentage: number;
   invite_links_enabled: number;
   external_links_enabled: number;
   timeout_minutes: number;
@@ -89,7 +86,6 @@ type ConfigureInput = {
   duplicateMessages: boolean | null;
   mentionLimit: number | null;
   emojiLimit: number | null;
-  capsPercentage: number | null;
   inviteLinks: boolean | null;
   externalLinks: boolean | null;
   timeoutMinutes: number | null;
@@ -164,7 +160,6 @@ export class AutoModService {
           duplicate_enabled = ?,
           mention_limit = ?,
           emoji_limit = ?,
-          caps_percentage = ?,
           invite_links_enabled = ?,
           external_links_enabled = ?,
           timeout_minutes = ?,
@@ -176,7 +171,6 @@ export class AutoModService {
       (input.duplicateMessages ?? current.duplicateEnabled) ? 1 : 0,
       input.mentionLimit ?? current.mentionLimit,
       input.emojiLimit ?? current.emojiLimit,
-      input.capsPercentage ?? current.capsPercentage,
       (input.inviteLinks ?? current.inviteLinksEnabled) ? 1 : 0,
       (input.externalLinks ?? current.externalLinksEnabled) ? 1 : 0,
       input.timeoutMinutes ?? current.timeoutMinutes,
@@ -338,15 +332,6 @@ export class AutoModService {
       };
     }
 
-    const capsPercentage = this.capsPercentage(content);
-    if (capsPercentage !== null && capsPercentage > config.capsPercentage) {
-      return {
-        rule: "Excessive Caps",
-        reason: `Too many capital letters (${capsPercentage}%).`,
-        timeoutEligible: false,
-      };
-    }
-
     const normalized = this.normalizeMessage(content);
     const trackedMessages = autoModTracker.trackMessage(message.guild!.id, message.author.id, normalized, message.createdTimestamp);
 
@@ -442,7 +427,6 @@ export class AutoModService {
       duplicateEnabled: row.duplicate_enabled === 1,
       mentionLimit: row.mention_limit,
       emojiLimit: row.emoji_limit,
-      capsPercentage: row.caps_percentage,
       inviteLinksEnabled: row.invite_links_enabled === 1,
       externalLinksEnabled: row.external_links_enabled === 1,
       timeoutMinutes: row.timeout_minutes,
@@ -580,20 +564,6 @@ export class AutoModService {
     const withoutCustomEmojis = content.replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, "");
     const unicodeEmojiCount = withoutCustomEmojis.match(/\p{Extended_Pictographic}/gu)?.length ?? 0;
     return customEmojiCount + unicodeEmojiCount;
-  }
-
-  private capsPercentage(content: string) {
-    const cleaned = content
-      .replace(/```[\s\S]*?```/g, "")
-      .replace(/`[^`]*`/g, "")
-      .replace(/https?:\/\/[^\s<>()]+/gi, "")
-      .replace(/<a?:[A-Za-z0-9_]{2,32}:\d{15,25}>/g, "");
-    const letters = cleaned.match(/\p{L}/gu) ?? [];
-
-    if (letters.length < 12) return null;
-
-    const uppercase = letters.filter(letter => letter === letter.toUpperCase() && letter !== letter.toLowerCase()).length;
-    return Math.round((uppercase / letters.length) * 100);
   }
 
   private normalizeMessage(content: string) {

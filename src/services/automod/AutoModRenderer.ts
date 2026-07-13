@@ -12,7 +12,6 @@ export class AutoModRenderer {
         { name: "Duplicates", value: config.duplicateEnabled ? "On" : "Off", inline: true },
         { name: "Mention Limit", value: `${config.mentionLimit}`, inline: true },
         { name: "Emoji Limit", value: `${config.emojiLimit}`, inline: true },
-        { name: "Caps Percentage", value: `${config.capsPercentage}%`, inline: true },
         { name: "Invite Links", value: config.inviteLinksEnabled ? "Blocked" : "Allowed", inline: true },
         { name: "External Links", value: config.externalLinksEnabled ? "Blocked" : "Allowed", inline: true },
         { name: "Timeout", value: config.timeoutMinutes > 0 ? `${config.timeoutMinutes} minutes` : "Disabled", inline: true },

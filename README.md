@@ -9,7 +9,7 @@ Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Mine
 - Welcome embeds with placeholders and optional join roles.
 - Minecraft Java/Bedrock verification with Java account lookup, confirmation buttons, nickname updates, platform roles, and logs.
 - Discord audit logging for messages, members, moderation, roles, channels, threads, voice, invites, and server updates.
-- Configurable AutoMod for spam, duplicate messages, mentions, emojis, invites, links, banned words, and excessive caps.
+- Configurable AutoMod for spam, duplicate messages, mentions, emojis, invites, links, and banned words.
 - Minecraft server IP and status commands.
 - SQLite persistence for events, participants, welcome settings, tickets, and counters.
 - Web dashboard with Discord OAuth, server overview, welcome/ticket/event/AutoMod/logging settings, and bot health.
@@ -204,45 +204,35 @@ Tickets:
 - `/ticketstaff remove`
 - `/ticketstaff rename`
 
-Welcome:
-
-- `/welcome setup`
-- `/welcome enable`
-- `/welcome preview`
-- `/welcome disable`
-- `/welcome refresh`
-
 Verification:
 
 - `/verify`
 - `/unverify`
-- `/verification setup`
 
 Admin:
 
-- `/setup`
-- `/automod status`
-- `/automod enable`
-- `/automod disable`
-- `/automod configure`
-- `/automod word add`
-- `/automod word remove`
-- `/automod word list`
-- `/automod domain allow`
-- `/automod domain remove`
-- `/automod domain list`
 - `/moderation`
 - `/channel`
 - `/purge`
+- `/ticketpanel send`
 
 Dashboard:
 
 - Overview
 - Welcome
+- Verification
 - Tickets
 - Events
 - AutoMod
 - Logging
+- Members
+- Roles
+- Nicknames
+- Warnings
+- Timeouts
+- Channels
+- Announcements
+- Settings
 - Bot Health
 
 ## Screenshots

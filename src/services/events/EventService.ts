@@ -1,6 +1,4 @@
 import {
-  AttachmentBuilder,
-  GuildMember,
   PermissionFlagsBits,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
@@ -9,9 +7,6 @@ import {
   type Role,
   type TextChannel,
 } from "discord.js";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
@@ -24,8 +19,6 @@ import {
   type EventStatus,
   type RsvpStatus,
 } from "./EventRenderer.js";
-
-const developerRoleId = "1518110330377736323";
 
 type EventRow = {
   id: number;
@@ -70,12 +63,6 @@ type EventEditInput = {
   maxPlayers: number | null;
   pingRole: Role | null;
   goingRole: Role | null;
-};
-
-type ParticipantExportFile = {
-  fileName: string;
-  filePath: string;
-  directory: string;
 };
 
 export class EventService {
@@ -139,15 +126,7 @@ export class EventService {
     });
 
     sqlite.prepare("UPDATE events SET message_id = ? WHERE id = ?").run(message.id, event.id);
-    await safeEdit(interaction, {
-      content: [
-        "Event created successfully.",
-        "",
-        `Event ID: ${event.eventNumber}`,
-        `Title: ${event.title}`,
-        `Channel: ${input.channel}`,
-      ].join("\n"),
-    });
+    await safeEdit(interaction, { content: `✅ Event created in ${input.channel}.` });
   }
 
   async edit(interaction: ChatInputCommandInteraction, input: EventEditInput) {
@@ -161,23 +140,19 @@ export class EventService {
     const event = this.getByNumber(interaction.guild.id, input.eventNumber);
 
     if (!event) {
-      await safeEdit(interaction, { content: "No event was found with that ID." });
+      await safeEdit(interaction, { content: "❌ Event not found." });
       return;
     }
 
     if (event.status === "ended") {
-      await safeEdit(interaction, { content: "That event has already ended." });
+      await safeEdit(interaction, { content: "❌ Ended events can't be edited." });
       return;
     }
 
-    const hasTimeChange = Boolean(input.date || input.time || input.duration);
+    const nextDate = input.date ?? new Date(event.startTimestamp).toString();
+    const nextTime = input.time;
     const nextDuration = input.duration ?? `${Math.max(1, Math.round((event.endTimestamp - event.startTimestamp) / 60000))}m`;
-    const parsedTime = hasTimeChange
-      ? this.parseEventTime(input.date ?? `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, input.time, nextDuration)
-      : {
-          startTimestamp: event.startTimestamp,
-          endTimestamp: event.endTimestamp,
-        };
+    const parsedTime = this.parseEventTime(nextDate, nextTime, nextDuration);
 
     if (!parsedTime) {
       await safeEdit(interaction, {
@@ -219,16 +194,12 @@ export class EventService {
     const event = this.getByNumber(interaction.guild.id, eventNumber);
 
     if (!event) {
-      await safeEdit(interaction, { content: "No event was found with that ID." });
+      await safeEdit(interaction, { content: "❌ Event not found." });
       return;
     }
 
-    await this.removeGoingRoleFromAssignedMembers(interaction.guild, event);
     await this.deleteEventMessage(interaction.client, event);
-    await this.deleteApplicationTicketChannels(interaction.guild, event.id);
-    sqlite.prepare("DELETE FROM event_applications WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM event_participants WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM event_reminders WHERE event_id = ?").run(event.id);
     sqlite.prepare("DELETE FROM events WHERE id = ?").run(event.id);
     await safeEdit(interaction, { content: "✅ Event deleted." });
@@ -245,32 +216,17 @@ export class EventService {
     const event = this.getByNumber(interaction.guild.id, eventNumber);
 
     if (!event) {
-      await safeEdit(interaction, { content: "No event was found with that ID." });
-      return;
-    }
-
-    if (event.status === "ended") {
-      await safeEdit(interaction, { content: "That event has already ended." });
+      await safeEdit(interaction, { content: "❌ Event not found." });
       return;
     }
 
     sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
     const updated = this.getById(event.id);
-    let eventLogSent = false;
     if (updated) {
       await this.updateEventMessage(interaction.client, updated);
-      eventLogSent = await this.sendEndedLog(interaction.guild, updated, interaction.user.id, new Date());
-      await this.removeGoingRoleFromAssignedMembers(interaction.guild, updated);
+      await this.sendEndedLog(interaction.client, updated, interaction.user.id, new Date());
     }
-    await safeEdit(interaction, {
-      content: [
-        "Event ended successfully.",
-        "",
-        `Event ID: ${event.eventNumber}`,
-        `Title: ${event.title}`,
-        `Event log sent: ${eventLogSent ? "Yes" : "No"}`,
-      ].join("\n"),
-    });
+    await safeEdit(interaction, { content: "✅ Event ended and locked." });
   }
 
   async list(interaction: ChatInputCommandInteraction) {
@@ -282,12 +238,7 @@ export class EventService {
     }
 
     const events = sqlite
-      .prepare(`
-        SELECT * FROM events
-        WHERE guild_id = ?
-        ORDER BY CASE WHEN status = 'scheduled' THEN 0 ELSE 1 END, created_at DESC
-        LIMIT 25
-      `)
+      .prepare("SELECT * FROM events WHERE guild_id = ? ORDER BY start_timestamp ASC LIMIT 25")
       .all(interaction.guild.id)
       .map(row => this.toEvent(row as EventRow));
 
@@ -328,27 +279,10 @@ export class EventService {
       ON CONFLICT(event_id, user_id) DO UPDATE SET status = excluded.status
     `).run(event.id, interaction.user.id, status);
 
-    await this.syncGoingRole(interaction.guild!, event, interaction.user.id, status);
-
     await interaction.update({
       embeds: [eventRenderer.renderEventEmbed(event, this.getCounts(event.id))],
       components: eventRenderer.renderEventComponents(event),
     });
-  }
-
-  getEventById(eventId: number) {
-    return this.getById(eventId);
-  }
-
-  async acceptApplicant(guild: Guild, client: Client, event: EventRecord, userId: string) {
-    sqlite.prepare(`
-      INSERT INTO event_participants (event_id, user_id, status)
-      VALUES (?, ?, 'going')
-      ON CONFLICT(event_id, user_id) DO UPDATE SET status = 'going'
-    `).run(event.id, userId);
-
-    await this.syncGoingRole(guild, event, userId, "going");
-    await this.updateEventMessage(client, event);
   }
 
   async showParticipants(interaction: ButtonInteraction, eventId: number) {
@@ -360,15 +294,15 @@ export class EventService {
     }
 
     await safeReply(interaction, {
-      embeds: [eventRenderer.renderParticipantsEmbed(event, await this.getParticipantsForDisplay(interaction.guild!, event, false))],
+      embeds: [eventRenderer.renderParticipantsEmbed(event, this.getParticipants(event.id))],
       flags: 64,
     });
   }
 
-  async participants(interaction: ChatInputCommandInteraction, eventQuery: string | null, shouldExport: boolean) {
+  async participants(interaction: ChatInputCommandInteraction, eventQuery: string | null, _shouldExport = false) {
     await interaction.deferReply({ flags: 64 });
 
-    if (!interaction.inGuild() || !interaction.guildId || !interaction.guild) {
+    if (!interaction.inGuild() || !interaction.guildId) {
       await safeEdit(interaction, { content: "❌ Events can only be viewed in a server." });
       return;
     }
@@ -382,28 +316,23 @@ export class EventService {
       return;
     }
 
-    if (shouldExport) {
-      if (!this.canExportParticipants(interaction, event)) {
-        await safeEdit(interaction, { content: "You don't have permission to export participants." });
-        return;
-      }
-
-      const exportFile = await this.generateParticipantExport(interaction.guild, event);
-
-      try {
-        await safeEdit(interaction, {
-          content: "Participants exported successfully.",
-          files: [new AttachmentBuilder(exportFile.filePath, { name: exportFile.fileName })],
-        });
-      } finally {
-        await this.deleteParticipantExport(exportFile);
-      }
-      return;
-    }
-
     await safeEdit(interaction, {
-      embeds: [eventRenderer.renderParticipantsEmbed(event, await this.getParticipantsForDisplay(interaction.guild, event, this.canViewApplicationCounts(interaction)))],
+      embeds: [eventRenderer.renderParticipantsEmbed(event, this.getParticipants(event.id))],
     });
+  }
+
+  getEventById(eventId: number) {
+    return this.getById(eventId);
+  }
+
+  async acceptApplicant(_guild: Guild, client: Client, event: EventRecord, userId: string) {
+    sqlite.prepare(`
+      INSERT INTO event_participants (event_id, user_id, status)
+      VALUES (?, ?, 'going')
+      ON CONFLICT(event_id, user_id) DO UPDATE SET status = 'going'
+    `).run(event.id, userId);
+
+    await this.updateEventMessage(client, event);
   }
 
   getDueReminders(now: number) {
@@ -448,111 +377,29 @@ export class EventService {
     }
   }
 
-  async generateParticipantExport(guild: Guild, event: EventRecord): Promise<ParticipantExportFile> {
-    const participants = this.getParticipants(event.id);
-    const goingNames = await this.resolveParticipantNames(guild, event.id, participants.going);
-    const cantNames = await this.resolveDisplayNames(guild, participants.cant);
-    const fileName = `event-${event.eventNumber}-participants.txt`;
-    const directory = await mkdtemp(join(tmpdir(), "giize-event-participants-"));
-    const filePath = join(directory, fileName);
-    const contents = [
-      "GIIZE EVENTS PARTICIPANT EXPORT",
-      "",
-      `Event ID: ${event.eventNumber}`,
-      `Event: ${event.title}`,
-      `Exported At: ${this.formatExportDate(new Date())}`,
-      "",
-      `GOING (${goingNames.length})`,
-      this.formatExportNames(goingNames),
-      "",
-      `CAN'T GO (${cantNames.length})`,
-      this.formatExportNames(cantNames),
-      "",
-      "GOING USERNAMES ONLY",
-      this.formatExportNames(goingNames),
-      "",
-    ].join("\n");
-
-    await writeFile(filePath, contents, "utf8");
-    return { fileName, filePath, directory };
-  }
-
-  private async sendEndedLog(guild: Guild, event: EventRecord, endedById: string, endedAt: Date) {
+  private async sendEndedLog(client: Client, event: EventRecord, endedById: string, endedAt: Date) {
     try {
-      const channel = await guild.channels.fetch(config.eventLogsChannelId).catch(error => {
-        logger.warn("Failed to fetch event logs channel.", error);
-        return null;
-      });
-
-      logger.info(`Event logs channel found: ${Boolean(channel)}`);
-
-      if (!channel) {
-        logger.warn(`Event logs channel ${config.eventLogsChannelId} was not found.`);
-        return false;
-      }
-
-      logger.info(`Event logs channel name: ${"name" in channel ? channel.name : "unknown"}`);
-      logger.info(`Event logs channel type: ${channel.type}`);
+      const channel = await client.channels.fetch(config.eventLogsChannelId).catch(() => null);
 
       if (!channel?.isTextBased() || !("send" in channel)) {
-        logger.warn(`Event logs channel ${config.eventLogsChannelId} is not text based.`);
-        return false;
+        logger.warn(`Event logs channel ${config.eventLogsChannelId} was not found or is not text based.`);
+        return;
       }
 
-      const botMember = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
-
-      if (!botMember) {
-        logger.warn("Could not resolve bot member for event logs.");
-        return false;
-      }
-
-      const permissions = channel.permissionsFor(botMember);
-      const permissionChecks = [
-        ["View Channel", PermissionFlagsBits.ViewChannel],
-        ["Send Messages", PermissionFlagsBits.SendMessages],
-        ["Embed Links", PermissionFlagsBits.EmbedLinks],
-      ] as const;
-
-      for (const [label, permission] of permissionChecks) {
-        logger.info(`${label}: ${Boolean(permissions?.has(permission))}`);
-      }
-
-      const missingPermissions = permissionChecks
-        .filter(([, permission]) => !permissions?.has(permission))
-        .map(([label]) => label);
-
-      if (missingPermissions.length > 0) {
-        for (const permission of missingPermissions) {
-          logger.warn(`Missing event logs permission: ${permission}`);
-        }
-        return false;
-      }
-
-      const participants = await this.getParticipantsForDisplay(guild, event, true);
-      const counts = this.getCounts(event.id);
-      const exportFile = await this.generateParticipantExport(guild, event);
-
-      try {
-        await channel.send({
-          embeds: [
-            eventRenderer.renderEndedLogEmbed(
-              event,
-              participants,
-              counts,
-              endedById,
-              endedAt,
-              this.formatDuration(endedAt.getTime() - event.startTimestamp)
-            ),
-          ],
-          files: [new AttachmentBuilder(exportFile.filePath, { name: exportFile.fileName })],
-        });
-        return true;
-      } finally {
-        await this.deleteParticipantExport(exportFile);
-      }
+      await channel.send({
+        embeds: [
+          eventRenderer.renderEndedLogEmbed(
+            event,
+            this.getParticipants(event.id),
+            this.getCounts(event.id),
+            endedById,
+            endedAt,
+            this.formatDuration(endedAt.getTime() - event.startTimestamp)
+          ),
+        ],
+      });
     } catch (error) {
       logger.warn("Failed to send event end log.", error);
-      return false;
     }
   }
 
@@ -571,208 +418,10 @@ export class EventService {
     await message?.delete().catch(() => {});
   }
 
-  private async deleteApplicationTicketChannels(guild: Guild, eventId: number) {
-    const rows = sqlite
-      .prepare(`
-        SELECT application_channel_id AS channelId
-        FROM event_applications
-        WHERE event_id = ? AND application_channel_id IS NOT NULL
-      `)
-      .all(eventId) as { channelId: string }[];
-
-    for (const row of rows) {
-      const channel = await guild.channels.fetch(row.channelId).catch(error => {
-        if (this.isUnknownChannelError(error)) return null;
-        logger.warn(`Failed to fetch event application channel ${row.channelId}. Continuing event deletion.`, error);
-        return null;
-      });
-
-      if (!channel || !("delete" in channel)) continue;
-
-      await channel.delete("Event deleted").catch(error => {
-        if (this.isUnknownChannelError(error)) return;
-        logger.warn(`Failed to delete event application channel ${row.channelId}. Continuing event deletion.`, error);
-      });
-    }
-  }
-
-  private isUnknownChannelError(error: unknown) {
-    return typeof error === "object" && error !== null && "code" in error && error.code === 10003;
-  }
-
   private async fetchEventMessage(client: Client, event: EventRecord) {
     const channel = await client.channels.fetch(event.channelId).catch(() => null);
     if (!channel?.isTextBased() || !("messages" in channel)) return null;
     return channel.messages.fetch(event.messageId).catch(() => null);
-  }
-
-  private async syncGoingRole(guild: Guild, event: EventRecord, userId: string, status: RsvpStatus) {
-    if (!event.goingRole) return;
-
-    if (status === "going") {
-      await this.addGoingRole(guild, event, userId);
-      return;
-    }
-
-    await this.removeGoingRole(guild, event, userId);
-  }
-
-  private async addGoingRole(guild: Guild, event: EventRecord, userId: string) {
-    if (!event.goingRole) return;
-
-    const member = await guild.members.fetch(userId).catch(() => null);
-    const role = await guild.roles.fetch(event.goingRole).catch(() => null);
-
-    if (!member || !role) {
-      logger.warn(`Could not assign Going role for event ${event.id}: member or role missing.`);
-      return;
-    }
-
-    await member.roles.add(role, `RSVP Going for event ${event.eventNumber}`).then(() => {
-      sqlite.prepare(`
-        INSERT OR IGNORE INTO event_role_assignments (event_id, user_id, role_id)
-        VALUES (?, ?, ?)
-      `).run(event.id, userId, event.goingRole);
-    }).catch(error => {
-      logger.warn(`Failed to assign Going role ${event.goingRole} to ${userId} for event ${event.id}.`, error);
-    });
-  }
-
-  private async removeGoingRole(guild: Guild, event: EventRecord, userId: string) {
-    if (!event.goingRole) return;
-
-    const assignment = sqlite
-      .prepare("SELECT 1 FROM event_role_assignments WHERE event_id = ? AND user_id = ? AND role_id = ?")
-      .get(event.id, userId, event.goingRole);
-
-    if (!assignment) return;
-
-    const member = await guild.members.fetch(userId).catch(() => null);
-    const role = await guild.roles.fetch(event.goingRole).catch(() => null);
-
-    if (member && role) {
-      await member.roles.remove(role, `RSVP changed for event ${event.eventNumber}`).catch(error => {
-        logger.warn(`Failed to remove Going role ${event.goingRole} from ${userId} for event ${event.id}.`, error);
-      });
-    }
-
-    sqlite
-      .prepare("DELETE FROM event_role_assignments WHERE event_id = ? AND user_id = ? AND role_id = ?")
-      .run(event.id, userId, event.goingRole);
-  }
-
-  private async removeGoingRoleFromAssignedMembers(guild: Guild, event: EventRecord) {
-    if (!event.goingRole) return;
-
-    const rows = sqlite
-      .prepare("SELECT user_id AS userId FROM event_role_assignments WHERE event_id = ? AND role_id = ?")
-      .all(event.id, event.goingRole) as { userId: string }[];
-
-    for (const row of rows) {
-      await this.removeGoingRole(guild, event, row.userId);
-    }
-  }
-
-  private canExportParticipants(interaction: ChatInputCommandInteraction, event: EventRecord) {
-    if (interaction.user.id === event.hostId) return true;
-    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
-
-    const member = interaction.member;
-    return (
-      member instanceof GuildMember &&
-      (member.roles.cache.has(developerRoleId) || member.roles.cache.has(config.staffRoleId))
-    );
-  }
-
-  private async deleteParticipantExport(file: ParticipantExportFile) {
-    await rm(file.filePath, { force: true }).catch(error =>
-      logger.warn(`Failed to delete participant export file ${file.filePath}.`, error)
-    );
-    await rm(file.directory, { recursive: true, force: true }).catch(error =>
-      logger.warn(`Failed to delete participant export directory ${file.directory}.`, error)
-    );
-  }
-
-  private async resolveDisplayNames(guild: Guild, userIds: string[]) {
-    const names: string[] = [];
-
-    for (const userId of userIds) {
-      const member = await guild.members.fetch(userId).catch(() => null);
-      names.push(member?.displayName?.replace(/\s+/g, " ").trim() || "UnknownUser");
-    }
-
-    return names;
-  }
-
-  private async resolveParticipantNames(guild: Guild, eventId: number, userIds: string[]) {
-    const applicationRows = sqlite
-      .prepare(`
-        SELECT discord_id AS discordId, minecraft_username AS minecraftUsername
-        FROM event_applications
-        WHERE event_id = ? AND status = 'accepted'
-      `)
-      .all(eventId) as { discordId: string; minecraftUsername: string }[];
-    const minecraftNames = new Map(applicationRows.map(row => [row.discordId, row.minecraftUsername]));
-    const names: string[] = [];
-    const seen = new Set<string>();
-
-    for (const userId of userIds) {
-      const name = minecraftNames.get(userId) ?? (await this.resolveDisplayNames(guild, [userId]))[0] ?? "UnknownUser";
-      const key = name.toLowerCase();
-
-      if (!seen.has(key)) {
-        names.push(name);
-        seen.add(key);
-      }
-    }
-
-    return names;
-  }
-
-  private async getParticipantsForDisplay(guild: Guild, event: EventRecord, includeApplicationCounts: boolean) {
-    const participants = this.getParticipants(event.id);
-    return {
-      ...participants,
-      goingNames: await this.resolveParticipantNames(guild, event.id, participants.going),
-      applicationCounts: includeApplicationCounts ? this.getApplicationCounts(event.id) : undefined,
-    };
-  }
-
-  private canViewApplicationCounts(interaction: ChatInputCommandInteraction) {
-    if (interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) return true;
-    const member = interaction.member;
-    return member instanceof GuildMember &&
-      (member.roles.cache.has(developerRoleId) || member.roles.cache.has(config.staffRoleId));
-  }
-
-  private getApplicationCounts(eventId: number) {
-    const rows = sqlite
-      .prepare(`
-        SELECT status, COUNT(*) AS total
-        FROM event_applications
-        WHERE event_id = ?
-        GROUP BY status
-      `)
-      .all(eventId) as { status: "accepted" | "pending" | "rejected"; total: number }[];
-    const counts = { accepted: 0, pending: 0, rejected: 0 };
-
-    for (const row of rows) counts[row.status] = row.total;
-    return counts;
-  }
-
-  private formatExportNames(names: string[]) {
-    return names.length > 0 ? names.join(" ") : "None";
-  }
-
-  private formatExportDate(date: Date) {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hour24 = date.getHours();
-    const hour12 = hour24 % 12 || 12;
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const period = hour24 >= 12 ? "PM" : "AM";
-    return `${year}-${month}-${day} ${hour12}:${minutes} ${period}`;
   }
 
   private getById(id: number) {
@@ -817,12 +466,7 @@ export class EventService {
 
   private getCounts(eventId: number): EventCounts {
     const rows = sqlite
-      .prepare(`
-        SELECT status, COUNT(*) AS total
-        FROM event_participants
-        WHERE event_id = ? AND status IN ('going', 'cant')
-        GROUP BY status
-      `)
+      .prepare("SELECT status, COUNT(*) AS total FROM event_participants WHERE event_id = ? GROUP BY status")
       .all(eventId) as { status: RsvpStatus; total: number }[];
     const counts: EventCounts = { going: 0, cant: 0 };
 
@@ -832,12 +476,7 @@ export class EventService {
 
   private getParticipants(eventId: number): EventParticipantGroup {
     const rows = sqlite
-      .prepare(`
-        SELECT user_id AS userId, status
-        FROM event_participants
-        WHERE event_id = ? AND status IN ('going', 'cant')
-        ORDER BY status, user_id
-      `)
+      .prepare("SELECT user_id AS userId, status FROM event_participants WHERE event_id = ? ORDER BY status, user_id")
       .all(eventId) as { userId: string; status: RsvpStatus }[];
     const participants: EventParticipantGroup = { going: [], cant: [] };
 

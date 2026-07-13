@@ -13,20 +13,12 @@ function canManage(member: unknown) {
   );
 }
 
-function canUseAutoMod(member: unknown) {
-  return member instanceof GuildMember && (
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.roles.cache.has(developerRoleId)
-  );
-}
-
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("help")
     .setDescription("Shows Giize Bot commands."),
   async execute(interaction) {
     const management = canManage(interaction.member);
-    const autoMod = canUseAutoMod(interaction.member);
 
     const embed = giizeEmbed()
       .setTitle("Giize Bot Help")
@@ -38,8 +30,7 @@ export const command: Command = {
         { name: "Tickets", value: management ? "`/ticket open` `/ticketstaff` `/ticketpanel send`" : "`/ticket open`" },
         { name: "Events", value: management ? "`/event` `/participants`" : "`/event list` `/participants`" },
         { name: "Moderation", value: management ? "`/moderation` `/channel` `/purge`" : "Available to staff only." },
-        { name: "AutoMod", value: autoMod ? "`/automod status` `/automod enable` `/automod disable` `/automod configure`" : "Available to administrators and developers." },
-        { name: "Welcome", value: interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) ? "`/welcome setup` `/welcome preview` `/welcome enable` `/welcome disable` `/welcome refresh`" : "`/welcome preview`" }
+        { name: "Dashboard", value: management ? "Use the web dashboard for Welcome, AutoMod, Verification, Logging, and tools." : "Available to staff in the web dashboard." }
       );
 
     await interaction.reply({ embeds: [embed], flags: 64 });

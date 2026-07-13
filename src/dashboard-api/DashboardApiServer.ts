@@ -3,9 +3,12 @@ import { hostname, uptime } from "node:os";
 import {
   ActionRowBuilder,
   ChannelType,
+  GuildMember,
+  PermissionFlagsBits,
   StringSelectMenuBuilder,
   type Client,
   type Guild,
+  type Role,
   type TextChannel,
 } from "discord.js";
 import { config } from "../config/config.js";
@@ -115,7 +118,17 @@ export class DashboardApiServer {
     if (request.path.startsWith("/events/") && request.path.endsWith("/end") && request.method === "POST") return this.endEvent(request);
     if (request.path.startsWith("/applications/") && request.method === "POST") return this.reviewApplication(request);
     if (request.path === "/automod") return request.method === "GET" ? this.automod() : this.updateAutoMod(request);
+    if (request.path.startsWith("/automod/") && request.method === "POST") return this.mutateAutoModList(request);
     if (request.path === "/logging") return request.method === "GET" ? this.logging() : this.updateLogging(request);
+    if (request.path === "/verification") return this.verification(request);
+    if (request.path === "/settings") return this.settings(request);
+    if (request.path === "/tools/member") return this.lookupMember(request);
+    if (request.path === "/tools/role" && request.method === "POST") return this.roleTool(request);
+    if (request.path === "/tools/nickname" && request.method === "POST") return this.nicknameTool(request);
+    if (request.path === "/tools/warnings") return request.method === "GET" ? this.memberWarnings(request) : this.warningTool(request);
+    if (request.path === "/tools/timeout" && request.method === "POST") return this.timeoutTool(request);
+    if (request.path === "/tools/channel" && request.method === "POST") return this.channelTool(request);
+    if (request.path === "/tools/announcement" && request.method === "POST") return this.announcementTool(request);
 
     return json({ error: "Not found" }, 404);
   }
@@ -414,16 +427,60 @@ export class DashboardApiServer {
     const body = request.body as Record<string, unknown>;
     const now = Date.now();
     sqlite.prepare(`
-      INSERT INTO automod_configs (guild_id, enabled, spam_enabled, duplicate_enabled, mention_limit, emoji_limit, caps_percentage, invite_links_enabled, external_links_enabled, timeout_minutes, log_channel_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO automod_configs (guild_id, enabled, spam_enabled, duplicate_enabled, mention_limit, emoji_limit, invite_links_enabled, external_links_enabled, timeout_minutes, log_channel_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(guild_id) DO UPDATE SET
         enabled = excluded.enabled, spam_enabled = excluded.spam_enabled, duplicate_enabled = excluded.duplicate_enabled,
-        mention_limit = excluded.mention_limit, emoji_limit = excluded.emoji_limit, caps_percentage = excluded.caps_percentage,
+        mention_limit = excluded.mention_limit, emoji_limit = excluded.emoji_limit,
         invite_links_enabled = excluded.invite_links_enabled, external_links_enabled = excluded.external_links_enabled,
         timeout_minutes = excluded.timeout_minutes, log_channel_id = excluded.log_channel_id, updated_at = excluded.updated_at
-    `).run(guild.id, this.boolNum(body.enabled), this.boolNum(body.spamEnabled), this.boolNum(body.duplicateEnabled), Number(body.mentionLimit ?? 5), Number(body.emojiLimit ?? 12), Number(body.capsPercentage ?? 80), this.boolNum(body.inviteLinksEnabled), this.boolNum(body.externalLinksEnabled), Number(body.timeoutMinutes ?? 10), this.nullableString(body, "logChannelId"), now, now);
+    `).run(guild.id, this.boolNum(body.enabled), this.boolNum(body.spamEnabled), this.boolNum(body.duplicateEnabled), Number(body.mentionLimit ?? 5), Number(body.emojiLimit ?? 12), this.boolNum(body.inviteLinksEnabled), this.boolNum(body.externalLinksEnabled), Number(body.timeoutMinutes ?? 10), this.nullableString(body, "logChannelId"), now, now);
     autoModService.invalidateGuild(guild.id);
     await this.audit(request, "Dashboard AutoMod Updated", "AutoMod", null, { guildId: guild.id });
+    return json({ ok: true });
+  }
+
+  private async mutateAutoModList(request: DashboardRequest) {
+    if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
+    const guild = await this.dashboardGuild();
+    const action = request.path.split("/")[2];
+    const body = request.body as Record<string, unknown>;
+
+    if (action === "word-add") {
+      const word = this.stringField(body, "word").toLowerCase();
+      const matchType = this.stringField(body, "matchType") === "exact" ? "exact" : "contains";
+      sqlite.prepare(`
+        INSERT INTO automod_banned_words (guild_id, word, match_type)
+        VALUES (?, ?, ?)
+        ON CONFLICT(guild_id, word) DO UPDATE SET match_type = excluded.match_type
+      `).run(guild.id, word, matchType);
+      await this.audit(request, "Dashboard AutoMod Word Added", "AutoMod", null, { word, matchType });
+    }
+
+    if (action === "word-remove") {
+      const word = this.stringField(body, "word").toLowerCase();
+      sqlite.prepare("DELETE FROM automod_banned_words WHERE guild_id = ? AND word = ?").run(guild.id, word);
+      await this.audit(request, "Dashboard AutoMod Word Removed", "AutoMod", { word }, null);
+    }
+
+    if (action === "domain-add") {
+      const domain = this.stringField(body, "domain").toLowerCase().replace(/^https?:\/\//, "").replace(/\/.*$/, "").replace(/^www\./, "");
+      sqlite.prepare("INSERT OR IGNORE INTO automod_allowed_domains (guild_id, domain) VALUES (?, ?)").run(guild.id, domain);
+      await this.audit(request, "Dashboard AutoMod Domain Added", "AutoMod", null, { domain });
+    }
+
+    if (action === "domain-remove") {
+      const domain = this.stringField(body, "domain");
+      sqlite.prepare("DELETE FROM automod_allowed_domains WHERE guild_id = ? AND domain = ?").run(guild.id, domain);
+      await this.audit(request, "Dashboard AutoMod Domain Removed", "AutoMod", { domain }, null);
+    }
+
+    if (action === "exempt-role-add") sqlite.prepare("INSERT OR IGNORE INTO automod_exempt_roles (guild_id, role_id) VALUES (?, ?)").run(guild.id, this.stringField(body, "roleId"));
+    if (action === "exempt-role-remove") sqlite.prepare("DELETE FROM automod_exempt_roles WHERE guild_id = ? AND role_id = ?").run(guild.id, this.stringField(body, "roleId"));
+    if (action === "exempt-channel-add") sqlite.prepare("INSERT OR IGNORE INTO automod_exempt_channels (guild_id, channel_id) VALUES (?, ?)").run(guild.id, this.stringField(body, "channelId"));
+    if (action === "exempt-channel-remove") sqlite.prepare("DELETE FROM automod_exempt_channels WHERE guild_id = ? AND channel_id = ?").run(guild.id, this.stringField(body, "channelId"));
+
+    autoModService.invalidateGuild(guild.id);
     return json({ ok: true });
   }
 
@@ -446,6 +503,192 @@ export class DashboardApiServer {
     sqlite.prepare("UPDATE automod_configs SET log_channel_id = ?, updated_at = ? WHERE guild_id = ?").run(automodLogChannelId, Date.now(), guild.id);
     await this.audit(request, "Dashboard Logging Updated", "Logging", null, { automodLogChannelId, note: "Env-backed channels require environment updates." });
     return json({ ok: true });
+  }
+
+  private async verification(request: DashboardRequest) {
+    if (request.method !== "GET") {
+      if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
+      await this.audit(request, "Dashboard Verification Viewed", "Verification", null, null);
+    }
+
+    const guild = await this.dashboardGuild();
+    return json({
+      configured: Boolean(config.javaVerifiedRoleId || config.bedrockVerifiedRoleId || config.verificationLogsChannelId),
+      javaRole: await this.roleLabel(guild, config.javaVerifiedRoleId),
+      bedrockRole: await this.roleLabel(guild, config.bedrockVerifiedRoleId),
+      verificationLogChannel: await this.channelLabel(guild, config.verificationLogsChannelId),
+      nicknamePreference: ["Java username", "Bedrock username", "Existing Discord nickname"],
+      roles: await guildRoles(guild),
+      channels: await guildChannels(guild),
+    });
+  }
+
+  private async settings(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    if (request.method !== "GET" && !requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
+    return json({
+      guild: this.guildSummary(guild),
+      configured: {
+        staffRole: await this.roleLabel(guild, config.staffRoleId),
+        developerRole: await this.roleLabel(guild, config.dashboardDeveloperRoleId),
+        ticketCategory: await this.channelLabel(guild, config.ticketCategoryId),
+        auditLogsChannel: await this.channelLabel(guild, config.auditLogsChannelId),
+        server: `${config.mcHost}:${config.mcPort}`,
+      },
+      note: "Environment-backed settings are displayed here. Secrets are never exposed.",
+    });
+  }
+
+  private async lookupMember(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    const query = request.query.get("q")?.trim();
+    if (!query) return json({ member: null, roles: await guildRoles(guild), channels: await guildChannels(guild) });
+    const id = query.match(/\d{17,20}/)?.[0];
+    const members = id
+      ? [await guild.members.fetch(id).catch(() => null)]
+      : [...(await guild.members.search({ query, limit: 1 })).values()];
+    const member = members.find(Boolean);
+    if (!member) return json({ member: null, roles: await guildRoles(guild), channels: await guildChannels(guild) });
+    const verified = sqlite.prepare("SELECT java_username, bedrock_username FROM verified_players WHERE guild_id = ? AND discord_id = ?").get(guild.id, member.id) as { java_username: string | null; bedrock_username: string | null } | undefined;
+    const warningCount = (sqlite.prepare("SELECT COUNT(*) AS total FROM moderation_warnings WHERE guild_id = ? AND user_id = ?").get(guild.id, member.id) as { total: number }).total;
+    const openTicketCount = [...guild.channels.cache.values()].filter(channel => channel.type === ChannelType.GuildText && channel.topic?.includes(`Creator ID: ${member.id}`)).length;
+    const applicationCount = (sqlite.prepare("SELECT COUNT(*) AS total FROM event_applications WHERE guild_id = ? AND discord_id = ?").get(guild.id, member.id) as { total: number }).total;
+    return json({
+      member: {
+        id: member.id,
+        username: member.user.username,
+        avatar: member.displayAvatarURL(),
+        displayName: member.displayName,
+        joinedAt: member.joinedTimestamp,
+        createdAt: member.user.createdTimestamp,
+        roles: member.roles.cache.filter(role => role.id !== guild.id).map(role => ({ id: role.id, name: role.name })),
+        timeoutUntil: member.communicationDisabledUntilTimestamp,
+        javaUsername: verified?.java_username ?? null,
+        bedrockUsername: verified?.bedrock_username ?? null,
+        warningCount,
+        openTicketCount,
+        applicationCount,
+      },
+      roles: await guildRoles(guild),
+      channels: await guildChannels(guild),
+    });
+  }
+
+  private async roleTool(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    const actor = await this.actorMember(request, guild);
+    if (!actor) return json({ error: "Forbidden" }, 403);
+    const member = await guild.members.fetch(this.stringField(request.body, "memberId"));
+    const role = await guild.roles.fetch(this.stringField(request.body, "roleId"));
+    const action = this.stringField(request.body, "action");
+    if (!role || !this.canManageRole(actor, role)) return json({ error: "Role cannot be managed" }, 403);
+    const before = member.roles.cache.map(existing => existing.id);
+    if (action === "add") await member.roles.add(role, `Dashboard role add by ${actor.user.tag}`);
+    if (action === "remove") await member.roles.remove(role, `Dashboard role remove by ${actor.user.tag}`);
+    await this.audit(request, "Dashboard Role Updated", "Tools", { memberId: member.id, roles: before }, { memberId: member.id, action, roleId: role.id });
+    return json({ ok: true });
+  }
+
+  private async nicknameTool(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    const actor = await this.actorMember(request, guild);
+    if (!actor) return json({ error: "Forbidden" }, 403);
+    const member = await guild.members.fetch(this.stringField(request.body, "memberId"));
+    if (!this.canManageMember(actor, member)) return json({ error: "Member cannot be managed" }, 403);
+    const before = member.nickname;
+    const nickname = this.nullableString(request.body, "nickname");
+    await member.setNickname(nickname, `Dashboard nickname by ${actor.user.tag}`);
+    await this.audit(request, "Dashboard Nickname Updated", "Tools", { memberId: member.id, nickname: before }, { memberId: member.id, nickname });
+    return json({ ok: true });
+  }
+
+  private async memberWarnings(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    const userId = request.query.get("memberId") ?? "";
+    const rows = sqlite.prepare("SELECT id, moderator_id, reason, created_at FROM moderation_warnings WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC").all(guild.id, userId);
+    return json({ warnings: rows });
+  }
+
+  private async warningTool(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    if (!request.actor) return json({ error: "Forbidden" }, 403);
+    const action = this.stringField(request.body, "action");
+    const memberId = this.stringField(request.body, "memberId", false);
+    const before = memberId ? sqlite.prepare("SELECT COUNT(*) AS total FROM moderation_warnings WHERE guild_id = ? AND user_id = ?").get(guild.id, memberId) : null;
+    if (action === "warn") {
+      sqlite.prepare("INSERT INTO moderation_warnings (guild_id, user_id, moderator_id, reason, source, created_at) VALUES (?, ?, ?, ?, 'manual', ?)").run(guild.id, memberId, request.actor.discordUserId, this.stringField(request.body, "reason"), Date.now());
+    }
+    if (action === "clear-one") sqlite.prepare("DELETE FROM moderation_warnings WHERE guild_id = ? AND id = ?").run(guild.id, Number(this.stringField(request.body, "warningId")));
+    if (action === "clear-all") sqlite.prepare("DELETE FROM moderation_warnings WHERE guild_id = ? AND user_id = ?").run(guild.id, memberId);
+    await this.audit(request, "Dashboard Warnings Updated", "Tools", before, { action, memberId });
+    return json({ ok: true });
+  }
+
+  private async timeoutTool(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    const actor = await this.actorMember(request, guild);
+    if (!actor) return json({ error: "Forbidden" }, 403);
+    const member = await guild.members.fetch(this.stringField(request.body, "memberId"));
+    if (!this.canManageMember(actor, member)) return json({ error: "Member cannot be managed" }, 403);
+    const action = this.stringField(request.body, "action");
+    const before = member.communicationDisabledUntilTimestamp;
+    const duration = Number(this.stringField(request.body, "durationMinutes", false) || 0);
+    const reason = this.stringField(request.body, "reason", false) || "Dashboard timeout update";
+    await member.timeout(action === "remove" ? null : duration * 60_000, reason);
+    await this.audit(request, "Dashboard Timeout Updated", "Tools", { memberId: member.id, timeoutUntil: before }, { memberId: member.id, action, duration });
+    return json({ ok: true });
+  }
+
+  private async channelTool(request: DashboardRequest) {
+    const guild = await this.dashboardGuild();
+    if (!request.actor) return json({ error: "Forbidden" }, 403);
+    const channel = await guild.channels.fetch(this.stringField(request.body, "channelId"));
+    if (!channel || channel.type !== ChannelType.GuildText) return json({ error: "Invalid channel" }, 400);
+    const action = this.stringField(request.body, "action");
+    const before = channel.permissionOverwrites.cache.get(guild.id)?.deny.bitfield.toString() ?? "inherited";
+    if (action === "lock") await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false });
+    if (action === "unlock") await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: null });
+    if (action === "hide") await channel.permissionOverwrites.edit(guild.roles.everyone, { ViewChannel: false });
+    if (action === "show") await channel.permissionOverwrites.edit(guild.roles.everyone, { ViewChannel: null });
+    if (action === "slowmode") await channel.setRateLimitPerUser(Number(this.stringField(request.body, "seconds", false) || 0));
+    await this.audit(request, "Dashboard Channel Updated", "Tools", { channelId: channel.id, overwrite: before }, { channelId: channel.id, action });
+    return json({ ok: true });
+  }
+
+  private async announcementTool(request: DashboardRequest) {
+    if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
+    const guild = await this.dashboardGuild();
+    const channel = await guild.channels.fetch(this.stringField(request.body, "channelId"));
+    if (!channel?.isTextBased() || !("send" in channel)) return json({ error: "Invalid channel" }, 400);
+    const roleId = this.nullableString(request.body, "roleId");
+    await channel.send({
+      content: roleId ? `<@&${roleId}>` : undefined,
+      allowedMentions: { roles: roleId ? [roleId] : [], users: [], parse: [] },
+      embeds: [giizeEmbed().setTitle(this.stringField(request.body, "title")).setDescription(this.stringField(request.body, "description")).setImage(this.nullableString(request.body, "imageUrl"))],
+    });
+    await this.audit(request, "Dashboard Announcement Sent", "Tools", null, { channelId: channel.id, roleId });
+    return json({ ok: true });
+  }
+
+  private async actorMember(request: DashboardRequest, guild: Guild) {
+    if (!request.actor) return null;
+    return guild.members.fetch(request.actor.discordUserId).catch(() => null);
+  }
+
+  private canManageMember(actor: GuildMember, target: GuildMember) {
+    if (target.id === actor.guild.ownerId || target.id === actor.client.user.id) return false;
+    if (actor.id !== actor.guild.ownerId && target.roles.highest.position >= actor.roles.highest.position) return false;
+    const botMember = actor.guild.members.me;
+    if (botMember && target.roles.highest.position >= botMember.roles.highest.position) return false;
+    return true;
+  }
+
+  private canManageRole(actor: GuildMember, role: Role) {
+    if (role.id === actor.guild.id || role.managed) return false;
+    if (actor.id !== actor.guild.ownerId && role.position >= actor.roles.highest.position) return false;
+    const botMember = actor.guild.members.me;
+    if (botMember && role.position >= botMember.roles.highest.position) return false;
+    return true;
   }
 
   private async dashboardGuild() {

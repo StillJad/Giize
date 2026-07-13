@@ -113,7 +113,6 @@ CREATE TABLE IF NOT EXISTS automod_configs (
   duplicate_enabled INTEGER NOT NULL DEFAULT 1,
   mention_limit INTEGER NOT NULL DEFAULT 5,
   emoji_limit INTEGER NOT NULL DEFAULT 12,
-  caps_percentage INTEGER NOT NULL DEFAULT 80,
   invite_links_enabled INTEGER NOT NULL DEFAULT 1,
   external_links_enabled INTEGER NOT NULL DEFAULT 0,
   timeout_minutes INTEGER NOT NULL DEFAULT 10,

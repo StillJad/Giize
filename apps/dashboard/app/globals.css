@@ -48,6 +48,8 @@ button.danger { background: var(--danger); }
 }
 .brand { font-size: 1.25rem; font-weight: 800; color: var(--purple-2); margin-bottom: 1.25rem; }
 .nav { display: grid; gap: 0.35rem; }
+.nav-section { display: grid; gap: 0.25rem; margin-bottom: 0.75rem; }
+.nav-section > span { color: var(--muted); font-size: 0.72rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.4rem 0.75rem 0.15rem; }
 .nav a { color: var(--muted); padding: 0.75rem; border-radius: 10px; }
 .nav a:hover { background: var(--panel); color: var(--text); }
 .main { padding: 1.5rem; min-width: 0; max-width: 1440px; width: 100%; }
