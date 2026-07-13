@@ -18,7 +18,14 @@ export default async function LoggingPage() {
       <h1>Logging</h1>
       <section className="card">
         <h2>Configured Channels</h2>
-        <pre className="muted">{JSON.stringify(data.channels, null, 2)}</pre>
+        <div className="settings-grid">
+          {Object.entries(data.channels).map(([key, value]) => (
+            <div className="setting" key={key}>
+              <span>{key.replace(/([A-Z])/g, " $1")}</span>
+              <strong>{value ?? "Not configured"}</strong>
+            </div>
+          ))}
+        </div>
         <p className="muted">Environment-backed log channels are shown here. AutoMod log channel can be updated from the dashboard.</p>
         <form className="row" action={saveLogging}>
           <select name="automodLogChannelId" defaultValue={data.channels.automodLogChannelId ?? ""}>

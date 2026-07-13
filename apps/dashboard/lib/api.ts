@@ -1,25 +1,38 @@
 import "server-only";
 import { redirect } from "next/navigation";
 import { dashboardConfig } from "./config";
-import { getSession } from "./session";
+import { createDashboardToken, getSession } from "./session";
+
+export class DashboardApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly route: string
+  ) {
+    super(`Dashboard API failed: ${status}`);
+  }
+}
 
 export async function botApi<T>(path: string, init?: RequestInit): Promise<T> {
   const session = await getSession();
   if (!session) redirect("/api/auth/login");
 
+  const method = init?.method ?? "GET";
   const response = await fetch(`${dashboardConfig.botApiUrl}${path}`, {
     ...init,
     cache: "no-store",
     headers: {
-      "content-type": "application/json",
+      "content-type": init?.headers instanceof Headers
+        ? init.headers.get("content-type") ?? "application/json"
+        : "application/json",
       "x-dashboard-secret": dashboardConfig.internalSecret,
-      "x-dashboard-token": session.dashboardToken,
+      "x-dashboard-token": createDashboardToken(session),
       ...(init?.headers ?? {}),
     },
   });
 
   if (!response.ok) {
-    throw new Error(`Dashboard API failed: ${response.status}`);
+    console.error(`Dashboard API request failed status=${response.status} method=${method} route=${path}`);
+    throw new DashboardApiError(response.status, path);
   }
 
   return response.json() as Promise<T>;

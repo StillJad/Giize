@@ -13,11 +13,12 @@ import { sqlite } from "../database/database.js";
 import { giizeEmbed } from "../utils/embeds.js";
 import { logger } from "../utils/logger.js";
 import { auditLogService } from "../services/audit/AuditLogService.js";
+import { autoModService } from "../services/automod/AutoModService.js";
 import { eventRenderer, type EventRecord } from "../services/events/EventRenderer.js";
 import { eventService } from "../services/events/EventService.js";
 import { ticketService } from "../services/tickets/TicketService.js";
 import { welcomeDescription, welcomeTitle } from "../services/welcome/WelcomeRenderer.js";
-import { safeEqual, signDashboardToken, verifyDashboardToken, type DashboardTokenPayload } from "./DashboardAuth.js";
+import { safeEqual, signDashboardToken, verifyDashboardTokenDetailed, type DashboardTokenPayload } from "./DashboardAuth.js";
 import { accessLevelFor, channelPermissionStatus, countsByStatus, guildChannels, guildRoles, json, requireEdit } from "./routes/shared.js";
 
 type ApiResult = ReturnType<typeof json>;
@@ -57,6 +58,8 @@ export class DashboardApiServer {
   constructor(private readonly client: Client) {}
 
   start() {
+    logger.info(`Dashboard config: internal secret configured=${Boolean(config.dashboardInternalSecret)} session secret configured=${Boolean(process.env.DASHBOARD_SESSION_SECRET)} guild ID configured=${Boolean(config.dashboardGuildId)}`);
+
     if (!config.dashboardInternalSecret) {
       logger.warn("Dashboard API disabled: DASHBOARD_INTERNAL_SECRET is not configured.");
       return;
@@ -70,6 +73,7 @@ export class DashboardApiServer {
   private async handle(request: IncomingMessage, response: ServerResponse) {
     try {
       if (!this.authorized(request)) {
+        logger.warn("Dashboard internal authentication failed.");
         this.write(response, json({ error: "Unauthorized" }, 401));
         return;
       }
@@ -80,7 +84,11 @@ export class DashboardApiServer {
       }
 
       const url = new URL(request.url ?? "/", "http://giize-bot");
-      const actor = verifyDashboardToken(request.headers["x-dashboard-token"]?.toString() ?? "");
+      const tokenResult = verifyDashboardTokenDetailed(request.headers["x-dashboard-token"]?.toString() ?? "");
+      if (!tokenResult.ok && url.pathname !== "/health" && url.pathname !== "/auth/member") {
+        logger.warn(`Dashboard token rejected: ${tokenResult.reason}`);
+      }
+      const actor = tokenResult.ok ? tokenResult.payload : null;
       const body = request.method === "GET" ? null : await this.readBody(request);
       const result = await this.route({ method: request.method ?? "GET", path: url.pathname, query: url.searchParams, actor, body });
       this.write(response, result);
@@ -229,16 +237,28 @@ export class DashboardApiServer {
     const channels = [...guild.channels.cache.values()].filter((channel): channel is TextChannel =>
       channel.type === ChannelType.GuildText && ticketService.hasStandardTicketMetadata(channel)
     );
-    const tickets = channels.map(channel => ({ channelId: channel.id, channel: `<#${channel.id}>`, topic: channel.topic ?? "", ...this.ticketFromTopic(channel.topic) }));
+    const tickets = await Promise.all(channels.map(async channel => {
+      const parsed = this.ticketFromTopic(channel.topic);
+      const creator = parsed.creatorId ? await guild.members.fetch(parsed.creatorId).catch(() => null) : null;
+      return {
+        channelId: channel.id,
+        channelName: channel.name,
+        topic: channel.topic ?? "",
+        creatorName: creator?.displayName ?? "Unknown member",
+        creatorAvatar: creator?.displayAvatarURL() ?? null,
+        ...parsed,
+      };
+    }));
     return json({
+      guildId: guild.id,
       config: {
-        ticketCategoryId: config.ticketCategoryId,
-        ticketLogsChannelId: config.ticketLogsChannelId,
-        staffRoleId: config.staffRoleId,
-        eventApplicationCategoryId: config.eventApplicationCategoryId || config.ticketCategoryId,
-        diamondSupporterRoleId: config.diamondSupporterRoleId,
-        ironSupporterRoleId: config.ironSupporterRoleId,
-        dirtSupporterRoleId: config.dirtSupporterRoleId,
+        ticketCategory: await this.channelLabel(guild, config.ticketCategoryId),
+        ticketLogsChannel: await this.channelLabel(guild, config.ticketLogsChannelId),
+        staffRole: await this.roleLabel(guild, config.staffRoleId),
+        eventApplicationCategory: await this.channelLabel(guild, config.eventApplicationCategoryId || config.ticketCategoryId),
+        diamondSupporterRole: await this.roleLabel(guild, config.diamondSupporterRoleId),
+        ironSupporterRole: await this.roleLabel(guild, config.ironSupporterRoleId),
+        dirtSupporterRole: await this.roleLabel(guild, config.dirtSupporterRoleId),
       },
       counts: {
         Diamond: tickets.filter(ticket => ticket.priority === "Diamond").length,
@@ -402,6 +422,7 @@ export class DashboardApiServer {
         invite_links_enabled = excluded.invite_links_enabled, external_links_enabled = excluded.external_links_enabled,
         timeout_minutes = excluded.timeout_minutes, log_channel_id = excluded.log_channel_id, updated_at = excluded.updated_at
     `).run(guild.id, this.boolNum(body.enabled), this.boolNum(body.spamEnabled), this.boolNum(body.duplicateEnabled), Number(body.mentionLimit ?? 5), Number(body.emojiLimit ?? 12), Number(body.capsPercentage ?? 80), this.boolNum(body.inviteLinksEnabled), this.boolNum(body.externalLinksEnabled), Number(body.timeoutMinutes ?? 10), this.nullableString(body, "logChannelId"), now, now);
+    autoModService.invalidateGuild(guild.id);
     await this.audit(request, "Dashboard AutoMod Updated", "AutoMod", null, { guildId: guild.id });
     return json({ ok: true });
   }
@@ -485,13 +506,37 @@ export class DashboardApiServer {
   }
 
   private ticketFromTopic(topic: string | null) {
+    const openedAtValue = topic?.match(/Opening Timestamp:\s*([^|]+)/)?.[1]?.trim();
     return {
-      ticketNumber: topic?.match(/Ticket #(\d+)/)?.[1] ?? null,
+      ticketNumber: topic?.match(/Ticket\s+(#[0-9]+)/)?.[1] ?? null,
       creatorId: topic?.match(/Creator ID:\s*(\d+)/)?.[1] ?? null,
       type: topic?.match(/Ticket Type:\s*([^|]+)/)?.[1]?.trim() ?? null,
       priority: topic?.match(/Priority:\s*(Diamond|Iron|Dirt|Normal)/)?.[1] ?? "Normal",
-      openedAt: Number(topic?.match(/Opening Timestamp:\s*(\d+)/)?.[1] ?? 0),
+      openedAt: this.parseStoredTimestamp(openedAtValue),
     };
+  }
+
+  private parseStoredTimestamp(value: string | undefined) {
+    if (!value) return null;
+    if (/^\d+$/.test(value)) {
+      const numeric = Number(value);
+      return numeric < 10_000_000_000 ? numeric * 1000 : numeric;
+    }
+
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  private async channelLabel(guild: Guild, channelId: string | null) {
+    if (!channelId) return { id: "", name: "Not configured" };
+    const channel = await guild.channels.fetch(channelId).catch(() => null);
+    return { id: channelId, name: channel && "name" in channel ? channel.name : "Missing channel" };
+  }
+
+  private async roleLabel(guild: Guild, roleId: string | null) {
+    if (!roleId) return { id: "", name: "Not configured" };
+    const role = await guild.roles.fetch(roleId).catch(() => null);
+    return { id: roleId, name: role?.name ?? "Missing role" };
   }
 
   private toEvent(row: EventRow): EventRecord {

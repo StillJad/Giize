@@ -21,6 +21,8 @@ async function saveWelcome(formData: FormData) {
 export default async function WelcomePage() {
   const data = await botApi<{ config: Record<string, string | number | null>; channels: { id: string; name: string }[]; roles: { id: string; name: string }[] }>("/welcome");
   const config = data.config;
+  const previewTitle = resolvePlaceholders(String(config.title ?? ""));
+  const previewDescription = resolvePlaceholders(String(config.description ?? ""));
 
   return (
     <>
@@ -44,11 +46,31 @@ export default async function WelcomePage() {
         </section>
         <section className="card">
           <h2>Preview</h2>
-          <h3>{String(config.title ?? "")}</h3>
-          <p style={{ whiteSpace: "pre-wrap" }}>{String(config.description ?? "")}</p>
-          {config.image_url ? <img src={String(config.image_url)} alt="" style={{ maxWidth: "100%", borderRadius: 12 }} /> : null}
+          <div className="discord-preview">
+            <div className="embed-bar" />
+            <div className="embed-body">
+              <h3>{previewTitle}</h3>
+              <p>{previewDescription}</p>
+              {config.image_url ? <img src={String(config.image_url)} alt="" /> : null}
+              <small>Giize Bot</small>
+            </div>
+          </div>
         </section>
       </form>
     </>
   );
+}
+
+function resolvePlaceholders(value: string) {
+  return value
+    .replaceAll("{username}", "StillJad")
+    .replaceAll("{mention}", "@StillJad")
+    .replaceAll("{membercount}", "239")
+    .replaceAll("{server}", "Giize Events")
+    .replaceAll("{rules}", "#rules")
+    .replaceAll("{about}", "#about")
+    .replaceAll("{roles}", "#roles")
+    .replaceAll("{bedrock}", "#bedrock")
+    .replaceAll("{announcements}", "#announcements")
+    .replaceAll("{ip}", "#server-ip");
 }

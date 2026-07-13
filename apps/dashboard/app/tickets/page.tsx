@@ -12,9 +12,10 @@ async function sendPanel(formData: FormData) {
 
 export default async function TicketsPage() {
   const data = await botApi<{
-    config: Record<string, string>;
+    guildId: string;
+    config: Record<string, { id: string; name: string }>;
     counts: Record<string, number>;
-    tickets: { ticketNumber: string | null; creatorId: string | null; type: string | null; priority: string; channel: string; openedAt: number }[];
+    tickets: { ticketNumber: string | null; creatorId: string | null; creatorName: string; creatorAvatar: string | null; type: string | null; priority: string; channelId: string; channelName: string; openedAt: number | null }[];
     channels: { id: string; name: string }[];
   }>("/tickets");
 
@@ -26,7 +27,14 @@ export default async function TicketsPage() {
       </div>
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Configuration</h2>
-        <pre className="muted">{JSON.stringify(data.config, null, 2)}</pre>
+        <div className="settings-grid">
+          {Object.entries(data.config).map(([label, value]) => (
+            <div className="setting" key={label}>
+              <span>{humanize(label)}</span>
+              <strong>{value.name}</strong>
+            </div>
+          ))}
+        </div>
       </section>
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Send Ticket Panel</h2>
@@ -40,12 +48,12 @@ export default async function TicketsPage() {
         <table className="table">
           <thead><tr><th>#</th><th>Creator</th><th>Type</th><th>Priority</th><th>Channel</th><th>Opened</th></tr></thead>
           <tbody>{data.tickets.map(ticket => (
-            <tr key={ticket.channel}>
+            <tr key={ticket.channelId}>
               <td>{ticket.ticketNumber ?? "-"}</td>
-              <td>{ticket.creatorId ? `<@${ticket.creatorId}>` : "-"}</td>
+              <td><span className="member-cell">{ticket.creatorAvatar ? <img className="mini-avatar" src={ticket.creatorAvatar} alt="" /> : null}{ticket.creatorName}</span></td>
               <td>{ticket.type ?? "-"}</td>
               <td>{ticket.priority}</td>
-              <td>{ticket.channel}</td>
+              <td><a className="channel-link" href={`https://discord.com/channels/${data.guildId}/${ticket.channelId}`}>#{ticket.channelName}</a></td>
               <td>{ticket.openedAt ? new Date(ticket.openedAt).toLocaleString() : "-"}</td>
             </tr>
           ))}</tbody>
@@ -53,4 +61,8 @@ export default async function TicketsPage() {
       </section>
     </>
   );
+}
+
+function humanize(value: string) {
+  return value.replace(/([A-Z])/g, " $1").replace(/^./, letter => letter.toUpperCase());
 }

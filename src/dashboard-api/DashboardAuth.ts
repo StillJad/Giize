@@ -30,16 +30,25 @@ export function signDashboardToken(payload: Omit<DashboardTokenPayload, "exp">, 
 }
 
 export function verifyDashboardToken(token: string): DashboardTokenPayload | null {
+  const result = verifyDashboardTokenDetailed(token);
+  return result.ok ? result.payload : null;
+}
+
+export function verifyDashboardTokenDetailed(token: string):
+  | { ok: true; payload: DashboardTokenPayload }
+  | { ok: false; reason: "token missing" | "token expired" | "signature invalid" | "wrong guild" | "malformed token" } {
+  if (!token) return { ok: false, reason: "token missing" };
   const [body, signature] = token.split(".");
-  if (!body || !signature || !safeEqual(signature, sign(body))) return null;
+  if (!body || !signature) return { ok: false, reason: "malformed token" };
+  if (!safeEqual(signature, sign(body))) return { ok: false, reason: "signature invalid" };
 
   try {
     const payload = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as DashboardTokenPayload;
-    if (payload.exp < Math.floor(Date.now() / 1000)) return null;
-    if (payload.guildId !== config.dashboardGuildId) return null;
-    return payload;
+    if (payload.exp < Math.floor(Date.now() / 1000)) return { ok: false, reason: "token expired" };
+    if (payload.guildId !== config.dashboardGuildId) return { ok: false, reason: "wrong guild" };
+    return { ok: true, payload };
   } catch {
-    return null;
+    return { ok: false, reason: "malformed token" };
   }
 }
 

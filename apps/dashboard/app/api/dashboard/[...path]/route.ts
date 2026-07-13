@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dashboardConfig } from "../../../../lib/config";
-import { getSession } from "../../../../lib/session";
+import { createDashboardToken, getSession } from "../../../../lib/session";
 
 async function proxy(request: NextRequest, context: { params: Promise<{ path: string[] }> }) {
   const session = await getSession();
@@ -11,9 +11,9 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path: st
   const response = await fetch(`${dashboardConfig.botApiUrl}${targetPath}`, {
     method: request.method,
     headers: {
-      "content-type": "application/json",
+      "content-type": request.headers.get("content-type") ?? "application/json",
       "x-dashboard-secret": dashboardConfig.internalSecret,
-      "x-dashboard-token": session.dashboardToken,
+      "x-dashboard-token": createDashboardToken(session),
     },
     body: request.method === "GET" ? undefined : await request.text(),
   });

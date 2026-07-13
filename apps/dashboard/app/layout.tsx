@@ -2,13 +2,13 @@ import "./globals.css";
 import { getSession } from "../lib/session";
 
 const nav = [
-  ["Overview", "/overview"],
-  ["Welcome", "/welcome"],
-  ["Tickets", "/tickets"],
-  ["Events", "/events"],
-  ["AutoMod", "/automod"],
-  ["Logging", "/logging"],
-  ["Bot Health", "/health"],
+  ["📊 Overview", "/overview"],
+  ["👋 Welcome", "/welcome"],
+  ["🎟️ Tickets", "/tickets"],
+  ["✨ Events", "/events"],
+  ["🛡️ AutoMod", "/automod"],
+  ["📜 Logging", "/logging"],
+  ["💜 Bot Health", "/health"],
 ];
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

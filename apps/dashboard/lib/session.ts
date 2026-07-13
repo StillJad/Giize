@@ -21,6 +21,14 @@ function sign(value: string) {
   return createHmac("sha256", dashboardConfig.sessionSecret).update(value).digest("base64url");
 }
 
+function signInternal(value: string) {
+  return createHmac("sha256", dashboardConfig.internalSecret).update(value).digest("base64url");
+}
+
+function base64url(value: string | Buffer) {
+  return Buffer.from(value).toString("base64url");
+}
+
 export function encodeSession(session: DashboardSession) {
   const body = Buffer.from(JSON.stringify(session)).toString("base64url");
   return `${body}.${sign(body)}`;
@@ -61,4 +69,15 @@ export async function setSession(session: DashboardSession) {
 export async function clearSession() {
   const cookieStore = await cookies();
   cookieStore.delete(cookieName);
+}
+
+export function createDashboardToken(session: DashboardSession, ttlSeconds = 900) {
+  const body = base64url(JSON.stringify({
+    discordUserId: session.discordUserId,
+    guildId: session.guildId,
+    accessLevel: session.accessLevel,
+    exp: Math.floor(Date.now() / 1000) + ttlSeconds,
+  }));
+
+  return `${body}.${signInternal(body)}`;
 }

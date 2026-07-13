@@ -1,11 +1,14 @@
 import { revalidatePath } from "next/cache";
 import { botApi } from "../../lib/api";
+import { EventActionButtons } from "./EventActionButtons";
 
 async function createEvent(formData: FormData) {
   "use server";
+  const startLocal = String(formData.get("startLocal") ?? "");
+  const start = startLocal ? `<t:${Math.floor(new Date(startLocal).getTime() / 1000)}:F>` : "";
   await botApi("/events", {
     method: "POST",
-    body: JSON.stringify(Object.fromEntries(formData)),
+    body: JSON.stringify({ ...Object.fromEntries(formData), start }),
   });
   revalidatePath("/events");
 }
@@ -61,7 +64,7 @@ export default async function EventsPage() {
         <form className="form" action={createEvent}>
           <div className="row">
             <label><span>Title</span><input name="title" required /></label>
-            <label><span>Start timestamp</span><input name="start" placeholder="<t:1735689600:F>" required /></label>
+            <label><span>Start time</span><input name="startLocal" type="datetime-local" required /></label>
           </div>
           <label><span>Description</span><textarea name="description" required /></label>
           <div className="row">
@@ -88,8 +91,7 @@ export default async function EventsPage() {
               <td>
                 <form action={eventAction}>
                   <input type="hidden" name="eventId" value={event.eventNumber} />
-                  <button name="action" value="end" className="secondary">End</button>{" "}
-                  <button name="action" value="delete" className="danger">Delete</button>
+                  <EventActionButtons ended={event.status === "ended"} />
                 </form>
               </td>
             </tr>

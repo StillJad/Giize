@@ -108,6 +108,10 @@ export class AutoModService {
     );
   }
 
+  invalidateGuild(guildId: string) {
+    this.invalidate(guildId);
+  }
+
   async status(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: 64 });
 
