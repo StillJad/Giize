@@ -19,6 +19,15 @@ export const command: Command = {
     }
 
     const member = interaction.member as GuildMember;
+
+    if (verificationService.hasActiveEventParticipation(interaction.guild!.id, member.id)) {
+      await interaction.reply({
+        content: "You cannot unverify while you are signed up for an active event. You can unverify after the event ends.",
+        flags: 64,
+      });
+      return;
+    }
+
     await verificationService.unverifyMember(interaction.guild!, member);
 
     const logChannelId = config.verificationLogsChannelId;

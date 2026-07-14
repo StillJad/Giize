@@ -109,6 +109,32 @@ export class VerificationService {
     };
   }
 
+  hasActiveEventParticipation(guildId: string, discordId: string) {
+    return Boolean(sqlite.prepare(`
+      SELECT 1
+      FROM events e
+      WHERE e.guild_id = ?
+        AND e.status = 'scheduled'
+        AND (
+          EXISTS (
+            SELECT 1
+            FROM event_participants p
+            WHERE p.event_id = e.id
+              AND p.user_id = ?
+              AND p.status = 'going'
+          )
+          OR EXISTS (
+            SELECT 1
+            FROM event_applications a
+            WHERE a.event_id = e.id
+              AND a.discord_id = ?
+              AND a.status = 'accepted'
+          )
+        )
+      LIMIT 1
+    `).get(guildId, discordId, discordId));
+  }
+
   async verifyMember(
     guild: Guild,
     member: GuildMember,

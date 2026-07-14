@@ -6,7 +6,7 @@ export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("purge")
     .setDescription("Preview and delete matching messages.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageMessages)
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addIntegerOption(option =>
       option.setName("amount").setDescription("Number of matching messages to delete.").setRequired(true).setMinValue(1).setMaxValue(1000)
     )

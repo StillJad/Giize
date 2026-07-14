@@ -15,7 +15,6 @@ import { safeEdit } from "../tickets/interactionResponses.js";
 import { logger } from "../../utils/logger.js";
 import { moderationRenderer } from "./ModerationRenderer.js";
 
-const developerRoleId = "1518110330377736323";
 const maxTimeoutMs = 28 * 24 * 60 * 60 * 1000;
 
 type WarningRow = {
@@ -321,11 +320,12 @@ export class ModerationService {
       return null;
     }
 
-    const allowed = interaction.member.permissions.has(PermissionFlagsBits.Administrator) ||
-      interaction.member.roles.cache.has(config.staffRoleId) ||
-      interaction.member.roles.cache.has(developerRoleId);
+    const hasAdministrator = interaction.member.permissions.has(PermissionFlagsBits.Administrator);
+    const hasStaffRole = interaction.member.roles.cache.has(config.staffRoleId);
+    const allowed = hasAdministrator || hasStaffRole;
 
     if (!allowed) {
+      logger.warn(`Denied moderation command. userId=${interaction.user.id} hasAdministrator=${hasAdministrator} hasStaffRole=${hasStaffRole}`);
       await safeEdit(interaction, { content: "You don't have permission to use this command." });
       return null;
     }

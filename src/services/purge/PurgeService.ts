@@ -1,7 +1,5 @@
 import {
-  GuildMember,
   MessageType,
-  PermissionFlagsBits,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
   type Message,
@@ -9,15 +7,14 @@ import {
   type User,
 } from "discord.js";
 import { randomUUID } from "node:crypto";
-import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
+import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 import { auditLogService } from "../audit/AuditLogService.js";
 import { safeEdit, safeReply } from "../tickets/interactionResponses.js";
 import { ticketService } from "../tickets/TicketService.js";
 import { purgeRenderer } from "./PurgeRenderer.js";
 
-const developerRoleId = "1518110330377736323";
 const fourteenDays = 14 * 24 * 60 * 60 * 1000;
 
 export type PurgeFilters = {
@@ -64,10 +61,9 @@ export class PurgeService {
       return;
     }
 
-    if (!this.canPurge(interaction.member)) {
-      const member = interaction.member instanceof GuildMember ? interaction.member : null;
-      logger.warn(`Denied purge command. command=purge subcommand=preview userId=${interaction.user.id} hasAdministrator=${Boolean(member?.permissions.has(PermissionFlagsBits.Administrator))} hasStaffRole=${Boolean(member?.roles.cache.has(config.staffRoleId))}`);
-      await safeEdit(interaction, { content: "You don't have permission to use this command." });
+    if (!this.canPurge(interaction.memberPermissions)) {
+      logger.warn(`Denied purge command. command=purge subcommand=preview userId=${interaction.user.id} hasAdministrator=${isAdministrator(interaction.memberPermissions)} hasStaffRole=${hasStaffRole(interaction.member)}`);
+      await safeEdit(interaction, { content: "You must be an administrator to use this command." });
       return;
     }
 
@@ -173,14 +169,8 @@ export class PurgeService {
     }
   }
 
-  private canPurge(member: unknown) {
-    return member instanceof GuildMember &&
-      (
-        member.permissions.has(PermissionFlagsBits.ManageMessages) ||
-        member.permissions.has(PermissionFlagsBits.Administrator) ||
-        member.roles.cache.has(config.staffRoleId) ||
-        member.roles.cache.has(developerRoleId)
-      );
+  private canPurge(memberPermissions: unknown) {
+    return isAdministrator(memberPermissions);
   }
 
   private isProtectedTicketChannel(channel: TextChannel) {

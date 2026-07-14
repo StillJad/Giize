@@ -214,8 +214,8 @@ export class EventRenderer {
     return {
       name: `${name} (${users.length})`,
       value: users.length > 0
-        ? users.map(user => plainText ? `• ${user}` : `• <@${user}>`).join("\n").slice(0, 1024)
-        : "No participants.",
+        ? (plainText ? users.join(", ") : users.map(user => `<@${user}>`).join(", ")).slice(0, 1024)
+        : "No accepted participants yet.",
       inline: false,
     };
   }
@@ -223,7 +223,7 @@ export class EventRenderer {
   private logParticipantField(name: string, users: string[]) {
     return {
       name,
-      value: users.length > 0 ? users.map(userId => `<@${userId}>`).join("\n").slice(0, 1024) : "None",
+      value: users.length > 0 ? users.join(", ").slice(0, 1024) : "No accepted participants yet.",
       inline: false,
     };
   }

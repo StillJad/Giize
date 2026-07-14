@@ -1,4 +1,5 @@
 import {
+  AttachmentBuilder,
   ChannelType,
   PermissionFlagsBits,
   type ButtonInteraction,
@@ -8,6 +9,9 @@ import {
   type Role,
   type TextChannel,
 } from "discord.js";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
@@ -50,6 +54,18 @@ type EventRoleAssignmentRow = {
   event_id: number;
   user_id: string;
   role_id: string;
+};
+
+type ParticipantRow = {
+  userId: string;
+  status: RsvpStatus;
+};
+
+type ParticipantNameRow = {
+  user_id: string;
+  minecraft_username: string | null;
+  java_username: string | null;
+  bedrock_username: string | null;
 };
 
 type EventCreateInput = {
@@ -322,7 +338,7 @@ export class EventService {
     });
   }
 
-  async participants(interaction: ChatInputCommandInteraction, eventQuery: string | null, _shouldExport = false) {
+  async participants(interaction: ChatInputCommandInteraction, eventQuery: string | null, shouldExport = false) {
     await interaction.deferReply({ flags: 64 });
 
     if (!interaction.inGuild() || !interaction.guildId) {
@@ -339,8 +355,27 @@ export class EventService {
       return;
     }
 
+    const participants = this.getParticipants(event.id);
+
+    if (shouldExport) {
+      const exportFile = await this.createParticipantExportFile(event, participants);
+
+      try {
+        await safeEdit(interaction, {
+          content: "Participants exported successfully.",
+          embeds: [],
+          files: [new AttachmentBuilder(exportFile.filePath, { name: exportFile.filename })],
+        });
+      } finally {
+        await rm(exportFile.directory, { recursive: true, force: true }).catch(error =>
+          logger.warn("Failed to remove participant export temp directory.", error)
+        );
+      }
+      return;
+    }
+
     await safeEdit(interaction, {
-      embeds: [eventRenderer.renderParticipantsEmbed(event, this.getParticipants(event.id))],
+      embeds: [eventRenderer.renderParticipantsEmbed(event, participants)],
     });
   }
 
@@ -434,18 +469,28 @@ export class EventService {
         return;
       }
 
-      await channel.send({
+      const participants = this.getParticipants(event.id);
+      const exportFile = await this.createParticipantExportFile(event, participants);
+
+      try {
+        await channel.send({
         embeds: [
           eventRenderer.renderEndedLogEmbed(
             event,
-            this.getParticipants(event.id),
+            participants,
             this.getCounts(event.id),
             endedById,
             endedAt,
             this.formatEventDuration(event, endedAt)
           ),
         ],
-      });
+          files: [new AttachmentBuilder(exportFile.filePath, { name: exportFile.filename })],
+        });
+      } finally {
+        await rm(exportFile.directory, { recursive: true, force: true }).catch(error =>
+          logger.warn("Failed to remove participant export temp directory.", error)
+        );
+      }
     } catch (error) {
       logger.warn("Failed to send event end log.", error);
     }
@@ -641,12 +686,93 @@ export class EventService {
 
   private getParticipants(eventId: number): EventParticipantGroup {
     const rows = sqlite
-      .prepare("SELECT user_id AS userId, status FROM event_participants WHERE event_id = ? ORDER BY status, user_id")
-      .all(eventId) as { userId: string; status: RsvpStatus }[];
+      .prepare("SELECT user_id AS userId, status FROM event_participants WHERE event_id = ? ORDER BY rowid")
+      .all(eventId) as ParticipantRow[];
     const participants: EventParticipantGroup = { going: [], cant: [] };
 
     for (const row of rows) participants[row.status].push(row.userId);
+    participants.goingNames = this.getParticipantMinecraftNames(eventId, participants.going);
     return participants;
+  }
+
+  private getParticipantMinecraftNames(eventId: number, userIds: string[]) {
+    if (userIds.length === 0) return [];
+
+    const rows = sqlite.prepare(`
+      SELECT
+        p.user_id,
+        a.minecraft_username,
+        v.java_username,
+        v.bedrock_username
+      FROM event_participants p
+      LEFT JOIN event_applications a
+        ON a.event_id = p.event_id
+        AND a.discord_id = p.user_id
+        AND a.status = 'accepted'
+      LEFT JOIN verified_players v
+        ON v.guild_id = (SELECT guild_id FROM events WHERE id = p.event_id)
+        AND v.discord_id = p.user_id
+      WHERE p.event_id = ?
+        AND p.status = 'going'
+      ORDER BY p.rowid
+    `).all(eventId) as ParticipantNameRow[];
+
+    const seen = new Set<string>();
+    const names: string[] = [];
+
+    for (const row of rows) {
+      const name = this.participantMinecraftName(row);
+      const key = name.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(name);
+    }
+
+    return names;
+  }
+
+  private participantMinecraftName(row: ParticipantNameRow) {
+    if (row.java_username) return row.java_username;
+    if (row.bedrock_username) return this.normalizeBedrockDisplay(row.bedrock_username);
+    if (row.minecraft_username?.startsWith(".")) return this.normalizeBedrockDisplay(row.minecraft_username);
+    return row.minecraft_username ?? row.user_id;
+  }
+
+  private normalizeBedrockDisplay(username: string) {
+    return `.${username.trim().replace(/^\.+/, "").trim()}`;
+  }
+
+  private async createParticipantExportFile(event: EventRecord, participants: EventParticipantGroup) {
+    const directory = await mkdtemp(join(tmpdir(), "giize-event-participants-"));
+    const filename = `event-${event.eventNumber}-participants.txt`;
+    const filePath = join(directory, filename);
+    const going = this.formatParticipantList(participants.goingNames ?? []);
+    const cant = this.formatParticipantList(participants.cant);
+    const exportedAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+
+    await writeFile(filePath, [
+      "GIIZE EVENTS PARTICIPANT EXPORT",
+      "",
+      `Event ID: ${event.eventNumber}`,
+      `Event: ${event.title}`,
+      `Exported At: ${exportedAt}`,
+      "",
+      `GOING (${participants.goingNames?.length ?? 0})`,
+      going,
+      "",
+      `CAN'T GO (${participants.cant.length})`,
+      cant,
+      "",
+      "GOING USERNAMES ONLY",
+      going,
+      "",
+    ].join("\n"), "utf8");
+
+    return { directory, filePath, filename };
+  }
+
+  private formatParticipantList(users: string[]) {
+    return users.length > 0 ? users.join(", ") : "No accepted participants yet.";
   }
 
   private getParticipantStatus(eventId: number, userId: string) {

@@ -1,12 +1,14 @@
-import { ChannelType, SlashCommandBuilder, type TextChannel } from "discord.js";
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder, type TextChannel } from "discord.js";
 import { moderationService } from "../../services/moderation/ModerationService.js";
 import type { Command } from "../../types/Command.js";
 import { logger } from "../../utils/logger.js";
+import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("channel")
     .setDescription("Manage channel permissions.")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand
         .setName("lock")
@@ -56,6 +58,12 @@ export const command: Command = {
     const channel = (interaction.options.getChannel("channel") ?? interaction.channel) as TextChannel | null;
 
     try {
+      if (!interaction.inGuild() || !isAdministrator(interaction.memberPermissions)) {
+        logger.warn(`Denied channel command. command=channel subcommand=${subcommand} userId=${interaction.user.id} hasAdministrator=${isAdministrator(interaction.memberPermissions)} hasStaffRole=${hasStaffRole(interaction.member)}`);
+        await interaction.reply({ content: "You must be an administrator to use this command.", flags: 64 });
+        return;
+      }
+
       if (!channel || channel.type !== ChannelType.GuildText) {
         await interaction.reply({ content: "This command can only be used in a text channel.", flags: 64 });
         return;
