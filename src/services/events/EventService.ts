@@ -1,4 +1,5 @@
 import {
+  ChannelType,
   PermissionFlagsBits,
   type ButtonInteraction,
   type ChatInputCommandInteraction,
@@ -37,6 +38,17 @@ type EventRow = {
   going_role: string | null;
   status: EventStatus;
   created_at: number;
+};
+
+type ApplicationCleanupRow = {
+  id: number;
+  application_channel_id: string | null;
+};
+
+type EventRoleAssignmentRow = {
+  event_id: number;
+  user_id: string;
+  role_id: string;
 };
 
 type EventCreateInput = {
@@ -202,10 +214,7 @@ export class EventService {
       return;
     }
 
-    await this.deleteEventMessage(interaction.client, event);
-    sqlite.prepare("DELETE FROM event_participants WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM event_reminders WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM events WHERE id = ?").run(event.id);
+    await this.deleteEvent(interaction.guild, interaction.client, event);
     await safeEdit(interaction, { content: "✅ Event deleted." });
   }
 
@@ -224,6 +233,7 @@ export class EventService {
       return;
     }
 
+    await this.removeTrackedGoingRoles(interaction.guild, event.id);
     sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
     const updated = this.getById(event.id);
     if (updated) {
@@ -329,14 +339,22 @@ export class EventService {
     return this.getById(eventId);
   }
 
-  async acceptApplicant(_guild: Guild, client: Client, event: EventRecord, userId: string) {
+  async acceptApplicant(guild: Guild, client: Client, event: EventRecord, userId: string) {
     sqlite.prepare(`
       INSERT INTO event_participants (event_id, user_id, status)
       VALUES (?, ?, 'going')
       ON CONFLICT(event_id, user_id) DO UPDATE SET status = 'going'
     `).run(event.id, userId);
 
+    await this.assignGoingRole(guild, event, userId);
     await this.updateEventMessage(client, event);
+  }
+
+  async deleteByNumber(guild: Guild, client: Client, eventNumber: number) {
+    const event = this.getByNumber(guild.id, eventNumber);
+    if (!event) return false;
+    await this.deleteEvent(guild, client, event);
+    return true;
   }
 
   getDueReminders(now: number) {
@@ -420,6 +438,123 @@ export class EventService {
   private async deleteEventMessage(client: Client, event: EventRecord) {
     const message = await this.fetchEventMessage(client, event);
     await message?.delete().catch(() => {});
+  }
+
+  private async deleteEvent(guild: Guild, client: Client, event: EventRecord) {
+    const applications = sqlite.prepare(`
+      SELECT id, application_channel_id
+      FROM event_applications
+      WHERE event_id = ?
+    `).all(event.id) as ApplicationCleanupRow[];
+
+    await this.removeTrackedGoingRoles(guild, event.id);
+    await this.deleteEventMessage(client, event);
+    await this.deleteApplicationChannels(guild, applications);
+
+    const cleanup = sqlite.transaction(() => {
+      sqlite.prepare("DELETE FROM event_applications WHERE event_id = ?").run(event.id);
+      sqlite.prepare("DELETE FROM event_participants WHERE event_id = ?").run(event.id);
+      sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ?").run(event.id);
+      sqlite.prepare("DELETE FROM event_reminders WHERE event_id = ?").run(event.id);
+      sqlite.prepare("DELETE FROM events WHERE id = ?").run(event.id);
+    });
+
+    cleanup();
+  }
+
+  private async deleteApplicationChannels(guild: Guild, applications: ApplicationCleanupRow[]) {
+    for (const application of applications) {
+      if (!application.application_channel_id) continue;
+
+      try {
+        const channel = await guild.channels.fetch(application.application_channel_id).catch(error => {
+          if (this.isUnknownChannelError(error)) return null;
+          throw error;
+        });
+
+        if (!channel || channel.type !== ChannelType.GuildText) continue;
+        await channel.delete(`Parent event deleted; application ${application.id} cleaned up.`);
+      } catch (error) {
+        logger.warn(`Failed to delete application channel for application ${application.id}. Continuing event cleanup.`, error);
+      }
+    }
+  }
+
+  private async assignGoingRole(guild: Guild, event: EventRecord, userId: string) {
+    const configuredRoleIdPresent = Boolean(event.goingRole);
+    const diagnostics = {
+      eventId: event.id,
+      applicantId: userId,
+      configuredRoleIdPresent,
+      roleFound: false,
+      manageRoles: false,
+      hierarchyAllowed: false,
+      roleAdded: false,
+      assignmentRowCreated: false,
+    };
+
+    if (!event.goingRole) {
+      logger.info(`Event Going role assignment skipped. ${JSON.stringify(diagnostics)}`);
+      return;
+    }
+
+    try {
+      const botMember = guild.members.me ?? (await guild.members.fetchMe());
+      const role = await guild.roles.fetch(event.goingRole).catch(() => null);
+      diagnostics.roleFound = Boolean(role);
+      diagnostics.manageRoles = botMember.permissions.has(PermissionFlagsBits.ManageRoles);
+      diagnostics.hierarchyAllowed = Boolean(role && botMember.roles.highest.comparePositionTo(role) > 0);
+
+      if (!role || !diagnostics.manageRoles || !diagnostics.hierarchyAllowed) {
+        logger.warn(`Event Going role assignment failed validation. ${JSON.stringify(diagnostics)}`);
+        return;
+      }
+
+      const member = await guild.members.fetch({ user: userId, force: true });
+      if (member.roles.cache.has(role.id)) {
+        logger.info(`Event Going role already existed on member; assignment row not created. ${JSON.stringify(diagnostics)}`);
+        return;
+      }
+
+      await member.roles.add(role, `Accepted event application for event ${event.eventNumber}`);
+      diagnostics.roleAdded = true;
+
+      const assignmentResult = sqlite.prepare(`
+        INSERT OR IGNORE INTO event_role_assignments (event_id, user_id, role_id)
+        VALUES (?, ?, ?)
+      `).run(event.id, userId, role.id);
+      diagnostics.assignmentRowCreated = assignmentResult.changes > 0;
+      logger.info(`Event Going role assignment completed. ${JSON.stringify(diagnostics)}`);
+    } catch (error) {
+      logger.warn(`Event Going role assignment failed. Application acceptance will continue. ${JSON.stringify(diagnostics)}`, error);
+    }
+  }
+
+  private async removeTrackedGoingRoles(guild: Guild, eventId: number) {
+    const assignments = sqlite.prepare(`
+      SELECT event_id, user_id, role_id
+      FROM event_role_assignments
+      WHERE event_id = ?
+    `).all(eventId) as EventRoleAssignmentRow[];
+
+    for (const assignment of assignments) {
+      try {
+        const member = await guild.members.fetch(assignment.user_id).catch(() => null);
+        if (!member?.roles.cache.has(assignment.role_id)) continue;
+        await member.roles.remove(assignment.role_id, `Event ${eventId} ended or was deleted.`);
+      } catch (error) {
+        logger.warn(`Failed to remove tracked event role for event ${eventId} user ${assignment.user_id}. Continuing cleanup.`, error);
+      }
+    }
+
+    sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ?").run(eventId);
+  }
+
+  private isUnknownChannelError(error: unknown) {
+    return typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      (error as { code?: unknown }).code === 10003;
   }
 
   private async fetchEventMessage(client: Client, event: EventRecord) {

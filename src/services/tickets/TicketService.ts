@@ -438,7 +438,7 @@ export class TicketService {
     return interaction.channel as TextChannel;
   }
 
-  private classifyTicketChannel(
+  classifyTicketChannel(
     interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction
   ): TicketChannelClassification {
     if (!interaction.channel || !("name" in interaction.channel)) {

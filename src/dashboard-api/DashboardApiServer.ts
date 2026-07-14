@@ -386,13 +386,10 @@ export class DashboardApiServer {
   private async deleteEvent(request: DashboardRequest) {
     if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
     const guild = await this.dashboardGuild();
-    const event = this.eventByNumber(guild.id, Number(request.path.split("/")[2]));
+    const eventNumber = Number(request.path.split("/")[2]);
+    const event = this.eventByNumber(guild.id, eventNumber);
     if (!event) return json({ error: "No event was found with that ID." }, 404);
-    sqlite.prepare("DELETE FROM event_applications WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM event_participants WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM event_reminders WHERE event_id = ?").run(event.id);
-    sqlite.prepare("DELETE FROM events WHERE id = ?").run(event.id);
+    await eventService.deleteByNumber(guild, this.client, eventNumber);
     await this.audit(request, "Dashboard Event Deleted", "Events", event, null);
     return json({ ok: true });
   }

@@ -77,6 +77,7 @@ export const command: Command = {
         await ticketService.rename(interaction, interaction.options.getString("name", true));
       }
     } catch (error) {
+      const classification = ticketService.classifyTicketChannel(interaction);
       logger.error("Ticket command failed.", error, {
         type: "command",
         name: JSON.stringify({
@@ -84,7 +85,8 @@ export const command: Command = {
           subcommand,
           userId: interaction.user.id,
           channelId: interaction.channelId,
-          channelMetadataFound: ticketService.hasStandardTicketMetadata(interaction.channel),
+          channelMetadataFound: classification.type !== "none",
+          channelType: classification.type,
         }),
       });
 
