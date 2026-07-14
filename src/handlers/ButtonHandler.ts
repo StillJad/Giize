@@ -4,7 +4,7 @@ import { eventApplicationRouter } from "../services/events/EventApplicationRoute
 import { eventRouter } from "../services/events/EventRouter.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
-import { verificationService } from "../services/verification/VerificationService.js";
+import { VerificationService, verificationService } from "../services/verification/VerificationService.js";
 import { purgeService } from "../services/purge/PurgeService.js";
 import { moderationService } from "../services/moderation/ModerationService.js";
 import { giizeEmbed } from "../utils/embeds.js";
@@ -131,12 +131,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!username) {
       await safeReply(interaction, {
-        embeds: [
-          giizeEmbed()
-            .setTitle("Verification Failed")
-            .setDescription("That Minecraft username could not be found.\n\nPlease double-check the spelling and try again.")
-            .setFooter({ text: "Giize Events Verification System" }),
-        ],
+        embeds: [VerificationService.failureEmbed()],
         flags: 64,
       });
       return;
@@ -176,12 +171,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       logger.error("Verification button failed.", err, { type: "button", name: interaction.customId });
 
       await safeReply(interaction, {
-        embeds: [
-          giizeEmbed()
-            .setTitle("Verification Failed")
-            .setDescription("That Minecraft username could not be found.\n\nPlease double-check the spelling and try again.")
-            .setFooter({ text: "Giize Events Verification System" }),
-        ],
+        embeds: [VerificationService.saveFailureEmbed()],
         flags: 64,
       });
     }

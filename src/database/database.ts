@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { drizzle } from "drizzle-orm/better-sqlite3";
+import { logger } from "../utils/logger.js";
 
 export const sqlite = new Database("data/giize.db");
 
@@ -196,12 +197,73 @@ function addColumnIfMissing(table: string, column: string, definition: string) {
   }
 }
 
+function tableInfo(table: string) {
+  return sqlite.prepare(`PRAGMA table_info(${table})`).all() as {
+    name: string;
+    notnull: number;
+  }[];
+}
+
+function migrateVerifiedPlayersNullableLegacyUuid() {
+  const minecraftUuidColumn = tableInfo("verified_players").find(column => column.name === "minecraft_uuid");
+
+  if (!minecraftUuidColumn?.notnull) {
+    return;
+  }
+
+  const migrate = sqlite.transaction(() => {
+    sqlite.exec(`
+      DROP TABLE IF EXISTS verified_players_migration_backup;
+      ALTER TABLE verified_players RENAME TO verified_players_migration_backup;
+
+      CREATE TABLE verified_players (
+        guild_id TEXT,
+        discord_id TEXT NOT NULL,
+        java_username TEXT,
+        java_uuid TEXT,
+        bedrock_username TEXT,
+        verified_java_at INTEGER,
+        verified_bedrock_at INTEGER,
+        minecraft_uuid TEXT,
+        minecraft_username TEXT,
+        platform TEXT,
+        verification_code TEXT,
+        verified INTEGER DEFAULT 0,
+        verified_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+
+      INSERT INTO verified_players (
+        guild_id, discord_id, java_username, java_uuid, bedrock_username,
+        verified_java_at, verified_bedrock_at, minecraft_uuid, minecraft_username,
+        platform, verification_code, verified, verified_at, created_at
+      )
+      SELECT
+        guild_id, discord_id, java_username, java_uuid, bedrock_username,
+        verified_java_at, verified_bedrock_at, minecraft_uuid, minecraft_username,
+        platform, verification_code, verified, verified_at, created_at
+      FROM verified_players_migration_backup;
+
+      DROP TABLE verified_players_migration_backup;
+    `);
+  });
+
+  try {
+    migrate();
+    logger.info("✓ Migrated verified_players legacy minecraft_uuid constraint.");
+  } catch (error) {
+    logger.error("Failed to migrate verified_players legacy minecraft_uuid constraint.", error);
+    throw error;
+  }
+}
+
 addColumnIfMissing("verified_players", "guild_id", "TEXT");
 addColumnIfMissing("verified_players", "java_username", "TEXT");
 addColumnIfMissing("verified_players", "java_uuid", "TEXT");
 addColumnIfMissing("verified_players", "bedrock_username", "TEXT");
 addColumnIfMissing("verified_players", "verified_java_at", "INTEGER");
 addColumnIfMissing("verified_players", "verified_bedrock_at", "INTEGER");
+migrateVerifiedPlayersNullableLegacyUuid();
 addColumnIfMissing("events", "going_role", "TEXT");
 addColumnIfMissing("event_applications", "application_channel_id", "TEXT");
 

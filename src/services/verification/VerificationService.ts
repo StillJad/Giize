@@ -86,6 +86,13 @@ export class VerificationService {
       .setFooter({ text: "Giize Events Verification System" });
   }
 
+  static saveFailureEmbed() {
+    return giizeEmbed()
+      .setTitle("Verification Failed")
+      .setDescription("Verification could not be saved. Please try again.")
+      .setFooter({ text: "Giize Events Verification System" });
+  }
+
   getStoredAccounts(guildId: string, discordId: string): StoredMinecraftAccounts {
     const row = sqlite
       .prepare(`
