@@ -42,9 +42,9 @@ type EventRow = {
 type EventCreateInput = {
   title: string;
   description: string;
-  date: string;
+  date: string | null;
   time: string | null;
-  duration: string;
+  duration: string | null;
   location: string | null;
   maxPlayers: number | null;
   pingRole: Role | null;
@@ -83,7 +83,9 @@ export class EventService {
 
     if (!parsedTime) {
       await safeEdit(interaction, {
-        content: "Paste a Discord timestamp like <t:1735689600:F>.",
+        content: input.date || input.time
+          ? "Paste a Discord timestamp like <t:1735689600:F>."
+          : "Use a valid duration like 90m, 2h, or 1h 30m.",
       });
       return;
     }
@@ -149,9 +151,11 @@ export class EventService {
       return;
     }
 
-    const nextDate = input.date ?? new Date(event.startTimestamp).toString();
+    const nextDate = input.date ?? (event.startTimestamp > 0 ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : null);
     const nextTime = input.time;
-    const nextDuration = input.duration ?? `${Math.max(1, Math.round((event.endTimestamp - event.startTimestamp) / 60000))}m`;
+    const nextDuration = input.duration ?? (event.endTimestamp > 0
+      ? `${Math.max(1, Math.round((event.endTimestamp - event.startTimestamp) / 60000))}m`
+      : null);
     const parsedTime = this.parseEventTime(nextDate, nextTime, nextDuration);
 
     if (!parsedTime) {
@@ -394,7 +398,7 @@ export class EventService {
             this.getCounts(event.id),
             endedById,
             endedAt,
-            this.formatDuration(endedAt.getTime() - event.startTimestamp)
+            this.formatEventDuration(event, endedAt)
           ),
         ],
       });
@@ -499,16 +503,22 @@ export class EventService {
     );
   }
 
-  private parseEventTime(date: string, time: string | null, duration: string) {
-    const unixTimestamp = this.extractDiscordTimestamp([date, time].filter(Boolean).join(" "));
-    const durationMinutes = this.parseDurationMinutes(duration);
+  private parseEventTime(date: string | null, time: string | null, duration: string | null) {
+    const hasDateInput = Boolean(date || time);
+    const unixTimestamp = hasDateInput
+      ? this.extractDiscordTimestamp([date, time].filter(Boolean).join(" "))
+      : null;
+    const durationMinutes = duration ? this.parseDurationMinutes(duration) : null;
 
-    if (!unixTimestamp || !durationMinutes) return null;
+    if (hasDateInput && !unixTimestamp) return null;
+    if (duration && !durationMinutes) return null;
 
-    return {
-      startTimestamp: unixTimestamp * 1000,
-      endTimestamp: unixTimestamp * 1000 + durationMinutes * 60_000,
-    };
+    const startTimestamp = unixTimestamp ? unixTimestamp * 1000 : 0;
+    const endTimestamp = durationMinutes
+      ? startTimestamp + durationMinutes * 60_000
+      : 0;
+
+    return { startTimestamp, endTimestamp };
   }
 
   private extractDiscordTimestamp(input: string) {
@@ -546,6 +556,18 @@ export class EventService {
       minutes ? `${minutes}m` : "",
       seconds || (!days && !hours && !minutes) ? `${seconds}s` : "",
     ].filter(Boolean).join(" ");
+  }
+
+  private formatEventDuration(event: EventRecord, endedAt: Date) {
+    if (event.endTimestamp > 0 && event.endTimestamp > event.startTimestamp) {
+      return this.formatDuration(event.endTimestamp - event.startTimestamp);
+    }
+
+    if (event.startTimestamp > 0) {
+      return this.formatDuration(endedAt.getTime() - event.startTimestamp);
+    }
+
+    return "Unknown";
   }
 
   private canSendEvent(guild: Guild, channel: TextChannel) {

@@ -16,18 +16,18 @@ export const command: Command = {
         .addStringOption(option =>
           option.setName("description").setDescription("Event description.").setRequired(true).setMaxLength(2000)
         )
-        .addStringOption(option =>
-          option.setName("date").setDescription("Discord timestamp, like <t:1735689600:F>.").setRequired(true)
-        )
-        .addStringOption(option =>
-          option.setName("duration").setDescription("Duration, like 90m, 2h, or 1h 30m.").setRequired(true)
-        )
         .addChannelOption(option =>
           option
             .setName("channel")
             .setDescription("Channel where the event panel will be posted.")
             .addChannelTypes(ChannelType.GuildText)
             .setRequired(true)
+        )
+        .addStringOption(option =>
+          option.setName("date").setDescription("Discord timestamp, like <t:1735689600:F>.").setRequired(false)
+        )
+        .addStringOption(option =>
+          option.setName("duration").setDescription("Duration, like 90m, 2h, or 1h 30m.").setRequired(false)
         )
         .addStringOption(option =>
           option.setName("time").setDescription("Optional Discord timestamp override, like <t:1735689600:F>.").setRequired(false)
@@ -121,9 +121,9 @@ export const command: Command = {
       await eventService.create(interaction, {
         title: interaction.options.getString("title", true),
         description: interaction.options.getString("description", true),
-        date: interaction.options.getString("date", true),
+        date: interaction.options.getString("date"),
         time: interaction.options.getString("time"),
-        duration: interaction.options.getString("duration", true),
+        duration: interaction.options.getString("duration"),
         location: interaction.options.getString("location"),
         maxPlayers: interaction.options.getInteger("max_players"),
           pingRole: interaction.options.getRole("ping_role") as Role | null,

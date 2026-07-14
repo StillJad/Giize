@@ -36,6 +36,7 @@ type EventRow = {
   title: string;
   status: string;
   startTimestamp: number;
+  endTimestamp: number;
   channelId: string;
   applications: { accepted: number; pending: number; rejected: number };
   acceptedParticipants: number;
@@ -64,11 +65,11 @@ export default async function EventsPage() {
         <form className="form" action={createEvent}>
           <div className="row">
             <label><span>Title</span><input name="title" required /></label>
-            <label><span>Start time</span><input name="startLocal" type="datetime-local" required /></label>
+            <label><span>Start time</span><input name="startLocal" type="datetime-local" /></label>
           </div>
           <label><span>Description</span><textarea name="description" required /></label>
           <div className="row">
-            <label><span>Duration</span><input name="duration" placeholder="2h" required /></label>
+            <label><span>Duration</span><input name="duration" placeholder="2h" /></label>
             <label><span>Channel</span><select name="channelId">{data.channels.map(channel => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
             <label><span>Ping role</span><select name="pingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
             <label><span>Going role</span><select name="goingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
@@ -85,7 +86,7 @@ export default async function EventsPage() {
               <td>{event.eventNumber}</td>
               <td>{event.title}</td>
               <td><span className="pill">{event.status}</span></td>
-              <td>{new Date(event.startTimestamp).toLocaleString()}</td>
+              <td>{event.startTimestamp > 0 ? new Date(event.startTimestamp).toLocaleString() : "TBA"}</td>
               <td>{event.applications.accepted} accepted / {event.applications.pending} pending / {event.applications.rejected} rejected</td>
               <td>{event.acceptedParticipants}</td>
               <td>

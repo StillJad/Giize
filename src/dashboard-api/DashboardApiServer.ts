@@ -329,16 +329,20 @@ export class DashboardApiServer {
     if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
     const guild = await this.dashboardGuild();
     const body = request.body as Record<string, unknown>;
-    const startTimestamp = this.parseDiscordTimestamp(this.stringField(body, "start"));
-    const durationMinutes = this.parseDuration(this.stringField(body, "duration"));
+    const startInput = this.stringField(body, "start", false);
+    const durationInput = this.stringField(body, "duration", false);
+    const startTimestamp = startInput ? this.parseDiscordTimestamp(startInput) : 0;
+    const durationMinutes = durationInput ? this.parseDuration(durationInput) : null;
     const channel = await guild.channels.fetch(this.stringField(body, "channelId")).catch(() => null);
-    if (!startTimestamp || !durationMinutes || !channel?.isTextBased() || !("send" in channel)) return json({ error: "Invalid event input" }, 400);
+    if ((startInput && !startTimestamp) || (durationInput && !durationMinutes) || !channel?.isTextBased() || !("send" in channel)) return json({ error: "Invalid event input" }, 400);
     const eventNumber = this.nextEventNumber(guild.id);
     const now = Date.now();
+    const resolvedStartTimestamp = startTimestamp ?? 0;
+    const endTimestamp = durationMinutes ? resolvedStartTimestamp + durationMinutes * 60_000 : 0;
     const insert = sqlite.prepare(`
       INSERT INTO events (event_number, guild_id, message_id, channel_id, host_id, title, description, location, start_timestamp, end_timestamp, max_players, ping_role, going_role, status, created_at)
       VALUES (?, ?, '', ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?, 'scheduled', ?)
-    `).run(eventNumber, guild.id, channel.id, request.actor!.discordUserId, this.stringField(body, "title"), this.stringField(body, "description"), startTimestamp, startTimestamp + durationMinutes * 60_000, this.nullableString(body, "pingRole"), this.nullableString(body, "goingRole"), now);
+    `).run(eventNumber, guild.id, channel.id, request.actor!.discordUserId, this.stringField(body, "title"), this.stringField(body, "description"), resolvedStartTimestamp, endTimestamp, this.nullableString(body, "pingRole"), this.nullableString(body, "goingRole"), now);
     const event = this.toEvent(sqlite.prepare("SELECT * FROM events WHERE id = ?").get(Number(insert.lastInsertRowid)) as EventRow);
     const message = await channel.send({ embeds: [eventRenderer.renderEventEmbed(event, { going: 0, cant: 0 })], components: eventRenderer.renderEventComponents(event) });
     sqlite.prepare("UPDATE events SET message_id = ? WHERE id = ?").run(message.id, event.id);

@@ -43,15 +43,24 @@ export type EventParticipantGroup = {
 
 export class EventRenderer {
   renderEventEmbed(event: EventRecord, counts: EventCounts) {
-    const startSeconds = Math.floor(event.startTimestamp / 1000);
-    const endSeconds = Math.floor(event.endTimestamp / 1000);
     const goingValue = event.maxPlayers
       ? `${counts.going}/${event.maxPlayers}`
       : `${counts.going}`;
-    const fields: APIEmbedField[] = [
-      { name: "📅 Date & Time", value: `<t:${startSeconds}:F>`, inline: true },
-      { name: "🕒 Relative", value: `<t:${startSeconds}:R>\nEnds <t:${endSeconds}:R>`, inline: true },
-    ];
+    const fields: APIEmbedField[] = [];
+
+    if (this.hasDate(event)) {
+      const startSeconds = Math.floor(event.startTimestamp / 1000);
+      fields.push(
+        { name: "📅 Date & Time", value: `<t:${startSeconds}:F>`, inline: true },
+        { name: "🕒 Relative", value: `<t:${startSeconds}:R>`, inline: true }
+      );
+    } else {
+      fields.push({ name: "📅 Date & Time", value: "TBA", inline: true });
+    }
+
+    if (this.hasDuration(event)) {
+      fields.push({ name: "⏳ Duration", value: this.formatDuration(event), inline: true });
+    }
 
     if (event.location) {
       fields.push({ name: "📍 Location", value: event.location, inline: true });
@@ -131,9 +140,9 @@ export class EventRenderer {
       { name: "Event Name", value: event.title, inline: true },
       { name: "Ended By", value: `<@${endedById}>`, inline: true },
       { name: "Created By / Host", value: `<@${event.hostId}>`, inline: true },
-      { name: "Started At", value: `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, inline: true },
+      { name: "Started At", value: this.hasDate(event) ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : "TBA", inline: true },
       { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
-      { name: "Duration", value: duration, inline: true },
+      { name: "Duration", value: this.hasDuration(event) ? duration : "Unknown", inline: true },
       { name: "Going count", value: `${counts.going}`, inline: true },
       { name: "Can't Go count", value: `${counts.cant}`, inline: true },
       this.logParticipantField("Going", participants.goingNames ?? participants.going),
@@ -159,7 +168,7 @@ export class EventRenderer {
       value: [
         `Title: ${event.title}`,
         `Status: ${event.status === "scheduled" ? "Active" : "Ended"}`,
-        `Starts: <t:${Math.floor(event.startTimestamp / 1000)}:F>`,
+        `Starts: ${this.hasDate(event) ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : "TBA"}`,
         `Channel: <#${event.channelId}>`,
       ].join("\n"),
       inline: false,
@@ -177,9 +186,28 @@ export class EventRenderer {
       .setDescription(`${label} until this event starts.`)
       .addFields(
         { name: "Event", value: event.title, inline: true },
-        { name: "Starts", value: `<t:${Math.floor(event.startTimestamp / 1000)}:F>`, inline: true },
+        { name: "Starts", value: this.hasDate(event) ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : "TBA", inline: true },
         { name: "Location", value: event.location ?? "TBA", inline: true }
       );
+  }
+
+  private hasDate(event: EventRecord) {
+    return event.startTimestamp > 0;
+  }
+
+  private hasDuration(event: EventRecord) {
+    return event.endTimestamp > 0 && event.endTimestamp > event.startTimestamp;
+  }
+
+  private formatDuration(event: EventRecord) {
+    const milliseconds = event.endTimestamp - event.startTimestamp;
+    const totalMinutes = Math.max(1, Math.round(milliseconds / 60_000));
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return [
+      hours ? `${hours}h` : "",
+      minutes ? `${minutes}m` : "",
+    ].filter(Boolean).join(" ") || "Unknown";
   }
 
   private participantField(name: string, users: string[], plainText = false) {
