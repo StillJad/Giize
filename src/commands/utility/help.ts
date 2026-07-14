@@ -1,15 +1,14 @@
-import { GuildMember, PermissionFlagsBits, SlashCommandBuilder } from "discord.js";
+import { GuildMember, SlashCommandBuilder } from "discord.js";
 import { config } from "../../config/config.js";
 import type { Command } from "../../types/Command.js";
 import { giizeEmbed } from "../../utils/embeds.js";
-
-const developerRoleId = "1518110330377736323";
+import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 
 function canManage(member: unknown) {
   return member instanceof GuildMember && (
-    member.permissions.has(PermissionFlagsBits.Administrator) ||
-    member.roles.cache.has(config.staffRoleId) ||
-    member.roles.cache.has(developerRoleId)
+    isAdministrator(member) ||
+    hasStaffRole(member) ||
+    member.roles.cache.has(config.dashboardDeveloperRoleId)
   );
 }
 
@@ -19,6 +18,14 @@ export const command: Command = {
     .setDescription("Shows Giize Bot commands."),
   async execute(interaction) {
     const management = canManage(interaction.member);
+    const admin = isAdministrator(interaction.member);
+    const staff = hasStaffRole(interaction.member);
+    const eventCommands = admin ? "`/events list` `/participants` `/event`" : "`/events list` `/participants`";
+    const ticketCommands = [
+      "`/ticket open`",
+      staff || admin ? "`/ticketstaff`" : "",
+      admin ? "`/ticketpanel send`" : "",
+    ].filter(Boolean).join(" ");
 
     const embed = giizeEmbed()
       .setTitle("Giize Bot Help")
@@ -27,8 +34,8 @@ export const command: Command = {
         { name: "General", value: "`/help` `/ping`" },
         { name: "Minecraft", value: "`/server` `/status`" },
         { name: "Verification", value: "`/verify` `/unverify`" },
-        { name: "Tickets", value: management ? "`/ticket open` `/ticketstaff` `/ticketpanel send`" : "`/ticket open`" },
-        { name: "Events", value: management ? "`/event` `/participants`" : "`/event list` `/participants`" },
+        { name: "Tickets", value: ticketCommands },
+        { name: "Events", value: eventCommands },
         { name: "Moderation", value: management ? "`/moderation` `/channel` `/purge`" : "Available to staff only." },
         { name: "Dashboard", value: management ? "Use the web dashboard for Welcome, AutoMod, Verification, Logging, and tools." : "Available to staff in the web dashboard." }
       );

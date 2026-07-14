@@ -11,6 +11,7 @@ import {
 import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
+import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 import { safeEdit, safeReply } from "../tickets/interactionResponses.js";
 import {
   eventRenderer,
@@ -86,6 +87,8 @@ export class EventService {
       return;
     }
 
+    if (!await this.requireEventAdministrator(interaction, "create")) return;
+
     if (!this.canSendEvent(interaction.guild, input.channel)) {
       await safeEdit(interaction, { content: "❌ I can't send embeds and buttons in that channel." });
       return;
@@ -151,6 +154,8 @@ export class EventService {
       return;
     }
 
+    if (!await this.requireEventAdministrator(interaction, "edit")) return;
+
     const event = this.getByNumber(interaction.guild.id, input.eventNumber);
 
     if (!event) {
@@ -207,6 +212,8 @@ export class EventService {
       return;
     }
 
+    if (!await this.requireEventAdministrator(interaction, "delete")) return;
+
     const event = this.getByNumber(interaction.guild.id, eventNumber);
 
     if (!event) {
@@ -225,6 +232,8 @@ export class EventService {
       await safeEdit(interaction, { content: "❌ Events can only be ended in a server." });
       return;
     }
+
+    if (!await this.requireEventAdministrator(interaction, "end")) return;
 
     const event = this.getByNumber(interaction.guild.id, eventNumber);
 
@@ -354,6 +363,23 @@ export class EventService {
     const event = this.getByNumber(guild.id, eventNumber);
     if (!event) return false;
     await this.deleteEvent(guild, client, event);
+    return true;
+  }
+
+  async endByNumber(guild: Guild, client: Client, eventNumber: number, endedById: string) {
+    const event = this.getByNumber(guild.id, eventNumber);
+    if (!event) return false;
+    if (event.status === "ended") return false;
+
+    await this.removeTrackedGoingRoles(guild, event.id);
+    sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
+    const updated = this.getById(event.id);
+
+    if (updated) {
+      await this.updateEventMessage(client, updated);
+      await this.sendEndedLog(client, updated, endedById, new Date());
+    }
+
     return true;
   }
 
@@ -715,6 +741,17 @@ export class EventService {
       permissions.has(PermissionFlagsBits.SendMessages) &&
       permissions.has(PermissionFlagsBits.EmbedLinks)
     );
+  }
+
+  private async requireEventAdministrator(interaction: ChatInputCommandInteraction, subcommand: string) {
+    const hasAdministrator = isAdministrator(interaction.memberPermissions);
+    const staffRole = hasStaffRole(interaction.member);
+
+    if (hasAdministrator) return true;
+
+    logger.warn(`Denied event management command. command=event subcommand=${subcommand} userId=${interaction.user.id} hasAdministrator=${hasAdministrator} hasStaffRole=${staffRole}`);
+    await safeEdit(interaction, { content: "You must be an administrator to manage events." });
+    return false;
   }
 
   private toEvent(row: EventRow): EventRecord {

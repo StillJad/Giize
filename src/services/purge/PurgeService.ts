@@ -9,7 +9,9 @@ import {
   type User,
 } from "discord.js";
 import { randomUUID } from "node:crypto";
+import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
+import { logger } from "../../utils/logger.js";
 import { auditLogService } from "../audit/AuditLogService.js";
 import { safeEdit, safeReply } from "../tickets/interactionResponses.js";
 import { ticketService } from "../tickets/TicketService.js";
@@ -63,6 +65,8 @@ export class PurgeService {
     }
 
     if (!this.canPurge(interaction.member)) {
+      const member = interaction.member instanceof GuildMember ? interaction.member : null;
+      logger.warn(`Denied purge command. command=purge subcommand=preview userId=${interaction.user.id} hasAdministrator=${Boolean(member?.permissions.has(PermissionFlagsBits.Administrator))} hasStaffRole=${Boolean(member?.roles.cache.has(config.staffRoleId))}`);
       await safeEdit(interaction, { content: "You don't have permission to use this command." });
       return;
     }
@@ -174,6 +178,7 @@ export class PurgeService {
       (
         member.permissions.has(PermissionFlagsBits.ManageMessages) ||
         member.permissions.has(PermissionFlagsBits.Administrator) ||
+        member.roles.cache.has(config.staffRoleId) ||
         member.roles.cache.has(developerRoleId)
       );
   }

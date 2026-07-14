@@ -1,11 +1,12 @@
-import { ChannelType, SlashCommandBuilder, type Role, type TextChannel } from "discord.js";
+import { ChannelType, PermissionFlagsBits, SlashCommandBuilder, type Role, type TextChannel } from "discord.js";
 import { eventService } from "../../services/events/EventService.js";
 import type { Command } from "../../types/Command.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("event")
-    .setDescription("Create and manage Giize events.")
+    .setDescription("Manage Giize events.")
+    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand
         .setName("create")
@@ -52,7 +53,7 @@ export const command: Command = {
         .addIntegerOption(option =>
           option
             .setName("event_id")
-            .setDescription("The Event ID shown by /event create or /event list")
+            .setDescription("The Event ID shown by /event create or /events list")
             .setRequired(true)
             .setMinValue(1)
         )
@@ -91,7 +92,7 @@ export const command: Command = {
         .addIntegerOption(option =>
           option
             .setName("event_id")
-            .setDescription("The Event ID shown by /event create or /event list")
+            .setDescription("The Event ID shown by /event create or /events list")
             .setRequired(true)
             .setMinValue(1)
         )
@@ -103,15 +104,10 @@ export const command: Command = {
         .addIntegerOption(option =>
           option
             .setName("event_id")
-            .setDescription("The Event ID shown by /event create or /event list")
+            .setDescription("The Event ID shown by /event create or /events list")
             .setRequired(true)
             .setMinValue(1)
         )
-    )
-    .addSubcommand(subcommand =>
-      subcommand
-        .setName("list")
-        .setDescription("List events.")
     ),
 
   async execute(interaction) {
@@ -126,10 +122,10 @@ export const command: Command = {
         duration: interaction.options.getString("duration"),
         location: interaction.options.getString("location"),
         maxPlayers: interaction.options.getInteger("max_players"),
-          pingRole: interaction.options.getRole("ping_role") as Role | null,
-          goingRole: interaction.options.getRole("going_role") as Role | null,
-          channel: interaction.options.getChannel("channel", true) as TextChannel,
-        });
+        pingRole: interaction.options.getRole("ping_role") as Role | null,
+        goingRole: interaction.options.getRole("going_role") as Role | null,
+        channel: interaction.options.getChannel("channel", true) as TextChannel,
+      });
       return;
     }
 
@@ -142,10 +138,10 @@ export const command: Command = {
         time: interaction.options.getString("time"),
         duration: interaction.options.getString("duration"),
         location: interaction.options.getString("location"),
-          maxPlayers: interaction.options.getInteger("max_players"),
-          pingRole: interaction.options.getRole("ping_role") as Role | null,
-          goingRole: interaction.options.getRole("going_role") as Role | null,
-        });
+        maxPlayers: interaction.options.getInteger("max_players"),
+        pingRole: interaction.options.getRole("ping_role") as Role | null,
+        goingRole: interaction.options.getRole("going_role") as Role | null,
+      });
       return;
     }
 
@@ -159,8 +155,5 @@ export const command: Command = {
       return;
     }
 
-    if (subcommand === "list") {
-      await eventService.list(interaction);
-    }
   },
 };

@@ -4,25 +4,13 @@ import {
   PermissionFlagsBits,
   SlashCommandBuilder,
   StringSelectMenuBuilder,
-  GuildMember,
   type TextChannel,
 } from "discord.js";
 import { giizeEmbed } from "../../utils/embeds.js";
 import type { Command } from "../../types/Command.js";
 import { ticketService } from "../../services/tickets/TicketService.js";
 import { logger } from "../../utils/logger.js";
-
-const developerRoleId = "1518110330377736323";
-
-function canCreateTicketPanel(member: unknown) {
-  return (
-    member instanceof GuildMember &&
-    (
-      member.permissions.has(PermissionFlagsBits.Administrator) ||
-      member.roles.cache.has(developerRoleId)
-    )
-  );
-}
+import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
@@ -60,7 +48,8 @@ export const command: Command = {
     const subcommand = interaction.options.getSubcommand();
 
     try {
-      if (!interaction.inGuild() || !canCreateTicketPanel(interaction.member)) {
+      if (!interaction.inGuild() || !isAdministrator(interaction.memberPermissions)) {
+        logger.warn(`Denied ticket panel command. command=ticketpanel subcommand=${subcommand} userId=${interaction.user.id} hasAdministrator=${isAdministrator(interaction.memberPermissions)} hasStaffRole=${hasStaffRole(interaction.member)}`);
         await interaction.reply({
           content: "You don't have permission to create ticket panels.",
           flags: 64,

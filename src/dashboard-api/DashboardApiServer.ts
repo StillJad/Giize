@@ -15,6 +15,7 @@ import { config } from "../config/config.js";
 import { sqlite } from "../database/database.js";
 import { giizeEmbed } from "../utils/embeds.js";
 import { logger } from "../utils/logger.js";
+import { hasStaffRole, isAdministrator } from "../utils/permissions.js";
 import { auditLogService } from "../services/audit/AuditLogService.js";
 import { autoModService } from "../services/automod/AutoModService.js";
 import { eventRenderer, type EventRecord } from "../services/events/EventRenderer.js";
@@ -112,7 +113,7 @@ export class DashboardApiServer {
     if (request.path === "/welcome") return request.method === "GET" ? this.welcome() : this.updateWelcome(request);
     if (request.path === "/tickets") return this.tickets();
     if (request.path === "/tickets/panel" && request.method === "POST") return this.sendTicketPanel(request);
-    if (request.path === "/events") return request.method === "GET" ? this.events() : this.createEvent(request);
+    if (request.path === "/events") return request.method === "GET" ? this.events(request) : this.createEvent(request);
     if (request.path.startsWith("/events/") && request.method === "PATCH") return this.updateEvent(request);
     if (request.path.startsWith("/events/") && request.method === "DELETE") return this.deleteEvent(request);
     if (request.path.startsWith("/events/") && request.path.endsWith("/end") && request.method === "POST") return this.endEvent(request);
@@ -309,8 +310,9 @@ export class DashboardApiServer {
     return json({ ok: true });
   }
 
-  private async events() {
+  private async events(request: DashboardRequest) {
     const guild = await this.dashboardGuild();
+    const actor = await this.actorMember(request, guild);
     const rows = sqlite.prepare("SELECT * FROM events WHERE guild_id = ? ORDER BY created_at DESC LIMIT 50").all(guild.id).map(row => this.toEvent(row as EventRow));
     const applications = sqlite.prepare("SELECT * FROM event_applications WHERE guild_id = ? ORDER BY created_at DESC LIMIT 100").all(guild.id);
     return json({
@@ -320,14 +322,16 @@ export class DashboardApiServer {
         acceptedParticipants: (sqlite.prepare("SELECT COUNT(*) AS total FROM event_participants WHERE event_id = ? AND status = 'going'").get(event.id) as { total: number }).total,
       })),
       applications,
-      channels: await guildChannels(guild),
-      roles: await guildRoles(guild),
-    });
-  }
+	      channels: await guildChannels(guild),
+	      roles: await guildRoles(guild),
+	      canManageEvents: isAdministrator(actor),
+	    });
+	  }
 
-  private async createEvent(request: DashboardRequest) {
-    if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
-    const guild = await this.dashboardGuild();
+	  private async createEvent(request: DashboardRequest) {
+	    const eventAdmin = await this.requireDashboardEventAdministrator(request, "create");
+	    if (!eventAdmin.ok) return eventAdmin.response;
+	    const guild = eventAdmin.guild;
     const body = request.body as Record<string, unknown>;
     const startInput = this.stringField(body, "start", false);
     const durationInput = this.stringField(body, "duration", false);
@@ -348,11 +352,12 @@ export class DashboardApiServer {
     sqlite.prepare("UPDATE events SET message_id = ? WHERE id = ?").run(message.id, event.id);
     await this.audit(request, "Dashboard Event Created", "Events", null, { eventNumber, title: event.title });
     return json({ ok: true, eventNumber });
-  }
+	  }
 
-  private async updateEvent(request: DashboardRequest) {
-    if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
-    const guild = await this.dashboardGuild();
+	  private async updateEvent(request: DashboardRequest) {
+	    const eventAdmin = await this.requireDashboardEventAdministrator(request, "edit");
+	    if (!eventAdmin.ok) return eventAdmin.response;
+	    const guild = eventAdmin.guild;
     const eventNumber = Number(request.path.split("/")[2]);
     const event = this.eventByNumber(guild.id, eventNumber);
     if (!event) return json({ error: "No event was found with that ID." }, 404);
@@ -370,22 +375,25 @@ export class DashboardApiServer {
     await this.refreshEventMessage(event.id);
     await this.audit(request, "Dashboard Event Updated", "Events", event, this.eventByNumber(guild.id, eventNumber));
     return json({ ok: true });
-  }
+	  }
 
-  private async endEvent(request: DashboardRequest) {
-    if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
-    const guild = await this.dashboardGuild();
-    const event = this.eventByNumber(guild.id, Number(request.path.split("/")[2]));
-    if (!event) return json({ error: "No event was found with that ID." }, 404);
-    sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
-    await this.refreshEventMessage(event.id);
-    await this.audit(request, "Dashboard Event Ended", "Events", null, { eventNumber: event.eventNumber, title: event.title });
-    return json({ ok: true });
-  }
+	  private async endEvent(request: DashboardRequest) {
+	    const eventAdmin = await this.requireDashboardEventAdministrator(request, "end");
+	    if (!eventAdmin.ok) return eventAdmin.response;
+	    const guild = eventAdmin.guild;
+	    const eventNumber = Number(request.path.split("/")[2]);
+	    const event = this.eventByNumber(guild.id, eventNumber);
+	    if (!event) return json({ error: "No event was found with that ID." }, 404);
+	    if (event.status === "ended") return json({ error: "That event has already ended." }, 400);
+	    await eventService.endByNumber(guild, this.client, eventNumber, request.actor!.discordUserId);
+	    await this.audit(request, "Dashboard Event Ended", "Events", null, { eventNumber: event.eventNumber, title: event.title });
+	    return json({ ok: true });
+	  }
 
-  private async deleteEvent(request: DashboardRequest) {
-    if (!requireEdit(request.actor)) return json({ error: "Forbidden" }, 403);
-    const guild = await this.dashboardGuild();
+	  private async deleteEvent(request: DashboardRequest) {
+	    const eventAdmin = await this.requireDashboardEventAdministrator(request, "delete");
+	    if (!eventAdmin.ok) return eventAdmin.response;
+	    const guild = eventAdmin.guild;
     const eventNumber = Number(request.path.split("/")[2]);
     const event = this.eventByNumber(guild.id, eventNumber);
     if (!event) return json({ error: "No event was found with that ID." }, 404);
@@ -674,6 +682,23 @@ export class DashboardApiServer {
   private async actorMember(request: DashboardRequest, guild: Guild) {
     if (!request.actor) return null;
     return guild.members.fetch(request.actor.discordUserId).catch(() => null);
+  }
+
+  private async requireDashboardEventAdministrator(request: DashboardRequest, subcommand: string): Promise<
+    | { ok: true; guild: Guild; actor: GuildMember }
+    | { ok: false; response: ApiResult }
+  > {
+    const guild = await this.dashboardGuild();
+    const actor = await this.actorMember(request, guild);
+    const hasAdministrator = isAdministrator(actor);
+    const staffRole = hasStaffRole(actor);
+
+    if (actor && hasAdministrator) {
+      return { ok: true, guild, actor };
+    }
+
+    logger.warn(`Denied dashboard event management action. command=dashboard/events subcommand=${subcommand} userId=${request.actor?.discordUserId ?? "unknown"} hasAdministrator=${hasAdministrator} hasStaffRole=${staffRole}`);
+    return { ok: false, response: json({ error: "You must be an administrator to manage events." }, 403) };
   }
 
   private canManageMember(actor: GuildMember, target: GuildMember) {

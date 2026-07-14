@@ -55,28 +55,36 @@ type ApplicationRow = {
 };
 
 export default async function EventsPage() {
-  const data = await botApi<{ events: EventRow[]; applications: ApplicationRow[]; channels: { id: string; name: string }[]; roles: { id: string; name: string }[] }>("/events");
+  const data = await botApi<{
+    events: EventRow[];
+    applications: ApplicationRow[];
+    channels: { id: string; name: string }[];
+    roles: { id: string; name: string }[];
+    canManageEvents: boolean;
+  }>("/events");
 
   return (
     <>
       <h1>Events</h1>
-      <section className="card">
-        <h2>Create Event</h2>
-        <form className="form" action={createEvent}>
-          <div className="row">
-            <label><span>Title</span><input name="title" required /></label>
-            <label><span>Start time</span><input name="startLocal" type="datetime-local" /></label>
-          </div>
-          <label><span>Description</span><textarea name="description" required /></label>
-          <div className="row">
-            <label><span>Duration</span><input name="duration" placeholder="2h" /></label>
-            <label><span>Channel</span><select name="channelId">{data.channels.map(channel => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
-            <label><span>Ping role</span><select name="pingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
-            <label><span>Going role</span><select name="goingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
-          </div>
-          <button>Create Event</button>
-        </form>
-      </section>
+      {data.canManageEvents ? (
+        <section className="card">
+          <h2>Create Event</h2>
+          <form className="form" action={createEvent}>
+            <div className="row">
+              <label><span>Title</span><input name="title" required /></label>
+              <label><span>Start time</span><input name="startLocal" type="datetime-local" /></label>
+            </div>
+            <label><span>Description</span><textarea name="description" required /></label>
+            <div className="row">
+              <label><span>Duration</span><input name="duration" placeholder="2h" /></label>
+              <label><span>Channel</span><select name="channelId">{data.channels.map(channel => <option key={channel.id} value={channel.id}>#{channel.name}</option>)}</select></label>
+              <label><span>Ping role</span><select name="pingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
+              <label><span>Going role</span><select name="goingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
+            </div>
+            <button>Create Event</button>
+          </form>
+        </section>
+      ) : null}
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Events</h2>
         <table className="table">
@@ -90,10 +98,12 @@ export default async function EventsPage() {
               <td>{event.applications.accepted} accepted / {event.applications.pending} pending / {event.applications.rejected} rejected</td>
               <td>{event.acceptedParticipants}</td>
               <td>
-                <form action={eventAction}>
-                  <input type="hidden" name="eventId" value={event.eventNumber} />
-                  <EventActionButtons ended={event.status === "ended"} />
-                </form>
+                {data.canManageEvents ? (
+                  <form action={eventAction}>
+                    <input type="hidden" name="eventId" value={event.eventNumber} />
+                    <EventActionButtons ended={event.status === "ended"} />
+                  </form>
+                ) : <span className="muted">View only</span>}
               </td>
             </tr>
           ))}</tbody>
