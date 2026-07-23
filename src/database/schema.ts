@@ -68,6 +68,9 @@ export const events = sqliteTable("events", {
   maxPlayers: integer("max_players"),
   pingRole: text("ping_role"),
   goingRole: text("going_role"),
+  verifyRequired: integer("verify_required").notNull().default(1),
+  googleFormsEnabled: integer("google_forms_enabled").notNull().default(0),
+  googleFormUrl: text("google_form_url"),
   status: text("status").notNull(),
   createdAt: integer("created_at").notNull()
 });

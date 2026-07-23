@@ -6,10 +6,10 @@ import { config } from "../../config/config.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("server")
-    .setDescription("Shows the Giize Events Minecraft server IP."),
+    .setDescription("Shows the Glurps Events Minecraft server IP."),
   async execute(interaction) {
     const embed = giizeEmbed()
-      .setTitle("Giize Events Server")
+      .setTitle("Glurps Events Server")
       .addFields(
         { name: "IP", value: `\`${config.mcHost}\``, inline: true },
         { name: "Port", value: `\`${config.mcPort}\``, inline: true },

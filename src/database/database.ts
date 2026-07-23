@@ -76,6 +76,9 @@ CREATE TABLE IF NOT EXISTS events (
   max_players INTEGER,
   ping_role TEXT,
   going_role TEXT,
+  verify_required INTEGER NOT NULL DEFAULT 1,
+  google_forms_enabled INTEGER NOT NULL DEFAULT 0,
+  google_form_url TEXT,
   status TEXT NOT NULL,
   created_at INTEGER NOT NULL
 );
@@ -265,6 +268,9 @@ addColumnIfMissing("verified_players", "verified_java_at", "INTEGER");
 addColumnIfMissing("verified_players", "verified_bedrock_at", "INTEGER");
 migrateVerifiedPlayersNullableLegacyUuid();
 addColumnIfMissing("events", "going_role", "TEXT");
+addColumnIfMissing("events", "verify_required", "INTEGER NOT NULL DEFAULT 1");
+addColumnIfMissing("events", "google_forms_enabled", "INTEGER NOT NULL DEFAULT 0");
+addColumnIfMissing("events", "google_form_url", "TEXT");
 addColumnIfMissing("event_applications", "application_channel_id", "TEXT");
 
 sqlite.exec(`

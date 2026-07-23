@@ -5,6 +5,7 @@ import {
   type APIEmbedField,
 } from "discord.js";
 import { giizeEmbed } from "../../utils/embeds.js";
+import { applicationMethodLabel } from "./EventApplicationSettings.js";
 
 export type EventStatus = "scheduled" | "ended";
 export type RsvpStatus = "going" | "cant";
@@ -24,6 +25,9 @@ export type EventRecord = {
   maxPlayers: number | null;
   pingRole: string | null;
   goingRole: string | null;
+  verifyRequired: boolean;
+  googleFormsEnabled: boolean;
+  googleFormUrl: string | null;
   status: EventStatus;
   createdAt: number;
 };
@@ -68,28 +72,46 @@ export class EventRenderer {
 
     fields.push(
       { name: `👥 Going (${counts.going})`, value: goingValue, inline: true },
-      { name: `❌ Can't Go (${counts.cant})`, value: `${counts.cant}`, inline: true }
+      { name: `❌ Can't Go (${counts.cant})`, value: `${counts.cant}`, inline: true },
+      {
+        name: "📝 Applications",
+        value: `${applicationMethodLabel(event.googleFormsEnabled)} • Verification ${event.verifyRequired ? "required" : "optional"}`,
+        inline: false,
+      }
     );
 
     return giizeEmbed()
       .setTitle(event.title)
       .setDescription(event.description)
       .addFields(fields)
-      .setFooter({ text: event.status === "ended" ? "Event ended" : "Giize Bot" })
+      .setFooter({ text: event.status === "ended" ? "Event ended" : "Glurps Bot" })
       .setTimestamp(new Date(event.createdAt));
   }
 
   renderEventComponents(event: EventRecord) {
     const disabled = event.status === "ended";
+    const applyButton = new ButtonBuilder()
+      .setEmoji("📝")
+      .setLabel("Apply");
+
+    if (disabled) {
+      applyButton
+        .setCustomId(`event_apply:${event.id}`)
+        .setStyle(ButtonStyle.Success)
+        .setDisabled(true);
+    } else if (event.googleFormsEnabled && !event.verifyRequired && event.googleFormUrl) {
+      applyButton
+        .setURL(event.googleFormUrl)
+        .setStyle(ButtonStyle.Link);
+    } else {
+      applyButton
+        .setCustomId(event.googleFormsEnabled ? `event_apply_form:${event.id}` : `event_apply:${event.id}`)
+        .setStyle(ButtonStyle.Success);
+    }
 
     return [
       new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder()
-          .setCustomId(`event_apply:${event.id}`)
-          .setEmoji("📝")
-          .setLabel("Apply")
-          .setStyle(ButtonStyle.Success)
-          .setDisabled(disabled),
+        applyButton,
         new ButtonBuilder()
           .setCustomId(`event_rsvp:cant:${event.id}`)
           .setEmoji("❌")
@@ -143,6 +165,8 @@ export class EventRenderer {
       { name: "Started At", value: this.hasDate(event) ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : "TBA", inline: true },
       { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
       { name: "Duration", value: this.hasDuration(event) ? duration : "Unknown", inline: true },
+      { name: "Application Method", value: applicationMethodLabel(event.googleFormsEnabled), inline: true },
+      { name: "Verify Required", value: event.verifyRequired ? "Yes" : "No", inline: true },
       { name: "Going count", value: `${counts.going}`, inline: true },
       { name: "Can't Go count", value: `${counts.cant}`, inline: true },
       this.logParticipantField("Going", participants.goingNames ?? participants.going),
@@ -169,13 +193,15 @@ export class EventRenderer {
         `Title: ${event.title}`,
         `Status: ${event.status === "scheduled" ? "Active" : "Ended"}`,
         `Starts: ${this.hasDate(event) ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : "TBA"}`,
+        `Applications: ${applicationMethodLabel(event.googleFormsEnabled)}`,
+        `Verification required: ${event.verifyRequired ? "Yes" : "No"}`,
         `Channel: <#${event.channelId}>`,
       ].join("\n"),
       inline: false,
     }));
 
     return giizeEmbed()
-      .setTitle("✨ Giize Events")
+      .setTitle("✨ Glurps Events")
       .setDescription(events.length > 0 ? "Upcoming and recent events." : "No events found.")
       .addFields(fields.slice(0, 25));
   }

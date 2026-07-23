@@ -95,7 +95,7 @@ export const command: Command = {
         { name: "Platform", value: platformLabel, inline: true },
         { name: "Nickname After Verification", value: nicknameAfterVerification, inline: false }
       )
-      .setFooter({ text: "Giize Events Verification System" });
+      .setFooter({ text: "Glurps Events Verification System" });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()

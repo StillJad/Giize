@@ -6,7 +6,7 @@ import { giizeEmbed } from "../../utils/embeds.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("status")
-    .setDescription("Checks the Giize Events Minecraft server status."),
+    .setDescription("Checks the Glurps Events Minecraft server status."),
   async execute(interaction) {
     await interaction.deferReply();
 
@@ -15,7 +15,7 @@ export const command: Command = {
       const data = await res.json();
 
       const embed = giizeEmbed()
-        .setTitle(data.online ? "🟢 Giize Events is Online" : "🔴 Giize Events is Offline")
+        .setTitle(data.online ? "🟢 Glurps Events is Online" : "🔴 Glurps Events is Offline")
         .addFields(
           { name: "IP", value: `\`${config.mcHost}\``, inline: true },
           { name: "Port", value: `\`${config.mcPort}\``, inline: true },

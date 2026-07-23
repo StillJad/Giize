@@ -1,5 +1,7 @@
 import {
   ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   ChannelType,
   GuildMember,
   ModalBuilder,
@@ -64,9 +66,14 @@ export class EventApplicationService {
       return;
     }
 
+    if (event.googleFormsEnabled) {
+      await this.openGoogleForm(interaction, eventId);
+      return;
+    }
+
     const verified = this.getVerifiedAccount(interaction.guildId!, interaction.user.id);
 
-    if (!verified) {
+    if (event.verifyRequired && !verified) {
       await safeReply(interaction, {
         content: "You must verify your Minecraft account before applying for this event. Use `/verify`.",
         flags: 64,
@@ -104,6 +111,47 @@ export class EventApplicationService {
     );
   }
 
+  async openGoogleForm(interaction: ButtonInteraction, eventId: number) {
+    if (!interaction.inGuild()) {
+      await safeReply(interaction, { content: "Events can only be used in a server.", flags: 64 });
+      return;
+    }
+
+    const event = eventService.getEventById(eventId);
+    if (
+      !event
+      || event.guildId !== interaction.guildId
+      || event.status === "ended"
+      || !event.googleFormsEnabled
+      || !event.googleFormUrl
+    ) {
+      await safeReply(interaction, { content: "❌ This event is not accepting applications.", flags: 64 });
+      return;
+    }
+
+    if (event.verifyRequired && !this.getVerifiedAccount(interaction.guildId!, interaction.user.id)) {
+      await safeReply(interaction, {
+        content: "You must verify your Minecraft account before applying for this event. Use `/verify`.",
+        flags: 64,
+      });
+      return;
+    }
+
+    await safeReply(interaction, {
+      content: "Continue to the event application form:",
+      components: [
+        new ActionRowBuilder<ButtonBuilder>().addComponents(
+          new ButtonBuilder()
+            .setLabel("Open Google Form")
+            .setEmoji("📝")
+            .setStyle(ButtonStyle.Link)
+            .setURL(event.googleFormUrl)
+        ),
+      ],
+      flags: 64,
+    });
+  }
+
   async submit(interaction: ModalSubmitInteraction) {
     await interaction.deferReply({ flags: 64 });
 
@@ -135,7 +183,7 @@ export class EventApplicationService {
 
     const verified = this.getVerifiedAccount(interaction.guildId, interaction.user.id);
 
-    if (!verified) {
+    if (event.verifyRequired && !verified) {
       await safeEdit(interaction, { content: "You must verify your Minecraft account before applying for this event. Use `/verify`." });
       return;
     }
@@ -148,8 +196,8 @@ export class EventApplicationService {
     const application = this.createApplication({
       event,
       discordId: interaction.user.id,
-      minecraftUsername: verified.minecraftUsername,
-      platform: verified.platform,
+      minecraftUsername: verified?.minecraftUsername ?? member.displayName,
+      platform: verified?.platform ?? "Unverified",
       answerOne,
       answerTwo,
       priority,

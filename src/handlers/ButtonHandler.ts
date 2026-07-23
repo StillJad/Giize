@@ -69,7 +69,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    if (interaction.customId.startsWith("event_apply:") || interaction.customId.startsWith("event_app_")) {
+    if (
+      interaction.customId.startsWith("event_apply:")
+      || interaction.customId.startsWith("event_apply_form:")
+      || interaction.customId.startsWith("event_app_")
+    ) {
       await eventApplicationRouter.handleButton(interaction);
       return;
     }
@@ -106,7 +110,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           giizeEmbed()
             .setTitle("Verification Cancelled")
             .setDescription("Your Minecraft account was not linked.")
-            .setFooter({ text: "Giize Events Verification System" }),
+            .setFooter({ text: "Glurps Events Verification System" }),
         ],
         components: [],
       });
@@ -163,7 +167,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               { name: "Platform", value: platformLabel, inline: true },
               { name: "Nickname", value: result.nickname, inline: false }
             )
-            .setFooter({ text: "Giize Events Verification System" }),
+            .setFooter({ text: "Glurps Events Verification System" }),
         ],
         components: [],
       });

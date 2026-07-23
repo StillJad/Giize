@@ -61,7 +61,7 @@ export function AutoModForm({ data }: { data: AutoModData }) {
           <div className="section-head">
             <div>
               <h2>Protection Settings</h2>
-              <p className="muted">Tune the existing Giize AutoMod rules.</p>
+              <p className="muted">Tune the existing Glurps AutoMod rules.</p>
             </div>
             <button disabled={pending}>{pending ? "Saving..." : "Save Changes"}</button>
           </div>

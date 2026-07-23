@@ -1,4 +1,6 @@
 import "./globals.css";
+import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { getSession } from "../lib/session";
 
 const nav: [string, [string, string][]][] = [
@@ -9,16 +11,24 @@ const nav: [string, [string, string][]][] = [
   ["System", [["⚙️ Settings", "/settings"], ["💜 Bot Health", "/health"]]],
 ];
 
+export const metadata: Metadata = {
+  title: "Glurps Events",
+  description: "Minecraft civilization events built for Java and Bedrock players.",
+};
+
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const session = await getSession();
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-pathname") ?? "/";
+  const publicPage = pathname === "/";
 
   return (
     <html lang="en">
       <body>
-        {session ? (
+        {session && !publicPage ? (
           <div className="shell">
             <aside className="sidebar">
-              <div className="brand">Giize Bot</div>
+              <div className="brand">Glurps Bot</div>
               <nav className="nav">
                 {nav.map(([section, links]) => (
                   <div key={section} className="nav-section">

@@ -20,6 +20,7 @@ import { auditLogService } from "../services/audit/AuditLogService.js";
 import { autoModService } from "../services/automod/AutoModService.js";
 import { eventRenderer, type EventRecord } from "../services/events/EventRenderer.js";
 import { eventService } from "../services/events/EventService.js";
+import { normalizeGoogleFormUrl } from "../services/events/EventApplicationSettings.js";
 import { ticketService } from "../services/tickets/TicketService.js";
 import { welcomeDescription, welcomeTitle } from "../services/welcome/WelcomeRenderer.js";
 import { safeEqual, signDashboardToken, verifyDashboardTokenDetailed, type DashboardTokenPayload } from "./DashboardAuth.js";
@@ -50,6 +51,9 @@ type EventRow = {
   max_players: number | null;
   ping_role: string | null;
   going_role: string | null;
+  verify_required: number;
+  google_forms_enabled: number;
+  google_form_url: string | null;
   status: "scheduled" | "ended";
   created_at: number;
 };
@@ -104,6 +108,8 @@ export class DashboardApiServer {
 
   private async route(request: DashboardRequest): Promise<ApiResult> {
     if (request.path === "/health") return json(await this.health());
+    if (request.path === "/public/status") return this.publicStatus();
+    if (request.path === "/public/upcoming-event") return this.publicUpcomingEvent();
     if (request.path === "/auth/member" && request.method === "POST") return this.authMember(request.body);
 
     if (!request.actor) return json({ error: "Dashboard token required" }, 401);
@@ -173,6 +179,85 @@ export class DashboardApiServer {
     };
   }
 
+  private async publicStatus() {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4_000);
+
+    try {
+      const response = await fetch(`https://api.mcstatus.io/v2/status/java/${config.mcHost}:${config.mcPort}`, {
+        signal: controller.signal,
+      });
+      const data = await response.json() as {
+        online?: boolean;
+        players?: { online?: number; max?: number };
+        version?: { name_clean?: string };
+      };
+
+      return json({
+        online: Boolean(data.online),
+        playersOnline: data.players?.online ?? 0,
+        playersMax: data.players?.max ?? 0,
+        version: data.version?.name_clean ?? "Unknown",
+        edition: "Java + Bedrock",
+        address: config.publicMinecraftAddress,
+      });
+    } catch {
+      return json({
+        online: false,
+        unavailable: true,
+        playersOnline: 0,
+        playersMax: 0,
+        version: "Unknown",
+        edition: "Java + Bedrock",
+        address: config.publicMinecraftAddress,
+      });
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  private async publicUpcomingEvent() {
+    const row = sqlite.prepare(`
+      SELECT *
+      FROM events
+      WHERE guild_id = ? AND status = 'scheduled'
+      ORDER BY
+        CASE WHEN start_timestamp > 0 THEN start_timestamp ELSE 9223372036854775807 END ASC,
+        created_at ASC
+      LIMIT 1
+    `).get(config.dashboardGuildId) as EventRow | undefined;
+
+    if (!row) return json({ event: null });
+
+    const event = this.toEvent(row);
+    const method = event.googleFormsEnabled ? "Google Forms" : "Discord";
+    const apply = event.googleFormsEnabled && !event.verifyRequired && event.googleFormUrl
+      ? {
+          label: "Apply with Google Form",
+          url: event.googleFormUrl,
+          note: null,
+        }
+      : {
+          label: "Join Discord",
+          url: config.discordInviteUrl || null,
+          note: event.googleFormsEnabled
+            ? "Join Discord and verify your Minecraft account before applying."
+            : "Applications happen inside Discord.",
+        };
+
+    return json({
+      event: {
+        id: event.eventNumber,
+        title: event.title,
+        description: event.description,
+        startTimestamp: event.startTimestamp > 0 ? event.startTimestamp : null,
+        applicationMethod: method,
+        verifyRequired: event.verifyRequired,
+        apply,
+      },
+    });
+  }
+
   private async guild() {
     const guild = await this.dashboardGuild();
     return json({ guild: this.guildSummary(guild), channels: await guildChannels(guild), roles: await guildRoles(guild) });
@@ -217,7 +302,11 @@ export class DashboardApiServer {
   private async welcome() {
     const guild = await this.dashboardGuild();
     const row = sqlite.prepare("SELECT * FROM welcome_configs WHERE guild_id = ?").get(guild.id);
-    return json({ config: row ?? this.defaultWelcome(guild.id), channels: await guildChannels(guild), roles: await guildRoles(guild) });
+    const saved = row as Record<string, unknown> | undefined;
+    const welcomeConfig = saved
+      ? { ...saved, title: welcomeTitle, description: welcomeDescription }
+      : this.defaultWelcome(guild.id);
+    return json({ config: welcomeConfig, channels: await guildChannels(guild), roles: await guildRoles(guild) });
   }
 
   private async updateWelcome(request: DashboardRequest) {
@@ -343,10 +432,34 @@ export class DashboardApiServer {
     const now = Date.now();
     const resolvedStartTimestamp = startTimestamp ?? 0;
     const endTimestamp = durationMinutes ? resolvedStartTimestamp + durationMinutes * 60_000 : 0;
+    const googleFormsEnabled = this.booleanField(body, "googleForms", false);
+    const googleFormUrl = normalizeGoogleFormUrl(this.nullableString(body, "googleFormUrl"));
+
+    if (googleFormsEnabled && !googleFormUrl) return json({ error: "Please provide a valid Google Forms link." }, 400);
+
     const insert = sqlite.prepare(`
-      INSERT INTO events (event_number, guild_id, message_id, channel_id, host_id, title, description, location, start_timestamp, end_timestamp, max_players, ping_role, going_role, status, created_at)
-      VALUES (?, ?, '', ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?, 'scheduled', ?)
-    `).run(eventNumber, guild.id, channel.id, request.actor!.discordUserId, this.stringField(body, "title"), this.stringField(body, "description"), resolvedStartTimestamp, endTimestamp, this.nullableString(body, "pingRole"), this.nullableString(body, "goingRole"), now);
+      INSERT INTO events (
+        event_number, guild_id, message_id, channel_id, host_id, title, description, location,
+        start_timestamp, end_timestamp, max_players, ping_role, going_role, verify_required,
+        google_forms_enabled, google_form_url, status, created_at
+      )
+      VALUES (?, ?, '', ?, ?, ?, ?, NULL, ?, ?, NULL, ?, ?, ?, ?, ?, 'scheduled', ?)
+    `).run(
+      eventNumber,
+      guild.id,
+      channel.id,
+      request.actor!.discordUserId,
+      this.stringField(body, "title"),
+      this.stringField(body, "description"),
+      resolvedStartTimestamp,
+      endTimestamp,
+      this.nullableString(body, "pingRole"),
+      this.nullableString(body, "goingRole"),
+      this.booleanField(body, "verifyRequired", true) ? 1 : 0,
+      googleFormsEnabled ? 1 : 0,
+      googleFormsEnabled ? googleFormUrl : null,
+      now
+    );
     const event = this.toEvent(sqlite.prepare("SELECT * FROM events WHERE id = ?").get(Number(insert.lastInsertRowid)) as EventRow);
     const message = await channel.send({ embeds: [eventRenderer.renderEventEmbed(event, { going: 0, cant: 0 })], components: eventRenderer.renderEventComponents(event) });
     sqlite.prepare("UPDATE events SET message_id = ? WHERE id = ?").run(message.id, event.id);
@@ -363,13 +476,26 @@ export class DashboardApiServer {
     if (!event) return json({ error: "No event was found with that ID." }, 404);
     if (event.status === "ended") return json({ error: "That event has already ended." }, 400);
     const body = request.body as Record<string, unknown>;
+    const nextGoogleFormsEnabled = this.optionalBooleanField(body, "googleForms") ?? event.googleFormsEnabled;
+    const nextGoogleFormUrl = nextGoogleFormsEnabled
+      ? normalizeGoogleFormUrl(this.nullableString(body, "googleFormUrl") ?? event.googleFormUrl)
+      : null;
+
+    if (nextGoogleFormsEnabled && !nextGoogleFormUrl) return json({ error: "Please provide a valid Google Forms link." }, 400);
+
     sqlite.prepare(`
-      UPDATE events SET title = ?, description = ?, ping_role = ?, going_role = ? WHERE id = ?
+      UPDATE events
+      SET title = ?, description = ?, ping_role = ?, going_role = ?,
+          verify_required = ?, google_forms_enabled = ?, google_form_url = ?
+      WHERE id = ?
     `).run(
       this.stringField(body, "title", false) || event.title,
       this.stringField(body, "description", false) || event.description,
       this.nullableString(body, "pingRole") ?? event.pingRole,
       this.nullableString(body, "goingRole") ?? event.goingRole,
+      (this.optionalBooleanField(body, "verifyRequired") ?? event.verifyRequired) ? 1 : 0,
+      nextGoogleFormsEnabled ? 1 : 0,
+      nextGoogleFormUrl,
       event.id
     );
     await this.refreshEventMessage(event.id);
@@ -809,7 +935,7 @@ export class DashboardApiServer {
   }
 
   private toEvent(row: EventRow): EventRecord {
-    return { id: row.id, eventNumber: row.event_number, guildId: row.guild_id, messageId: row.message_id, channelId: row.channel_id, hostId: row.host_id, title: row.title, description: row.description, location: row.location, startTimestamp: row.start_timestamp, endTimestamp: row.end_timestamp, maxPlayers: row.max_players, pingRole: row.ping_role, goingRole: row.going_role, status: row.status, createdAt: row.created_at };
+    return { id: row.id, eventNumber: row.event_number, guildId: row.guild_id, messageId: row.message_id, channelId: row.channel_id, hostId: row.host_id, title: row.title, description: row.description, location: row.location, startTimestamp: row.start_timestamp, endTimestamp: row.end_timestamp, maxPlayers: row.max_players, pingRole: row.ping_role, goingRole: row.going_role, verifyRequired: Boolean(row.verify_required), googleFormsEnabled: Boolean(row.google_forms_enabled), googleFormUrl: row.google_form_url, status: row.status, createdAt: row.created_at };
   }
 
   private eventByNumber(guildId: string, eventNumber: number) {
@@ -883,6 +1009,21 @@ export class DashboardApiServer {
 
   private optionalBool(value: unknown, fallback: boolean) {
     return typeof value === "boolean" ? value : fallback;
+  }
+
+  private booleanField(body: unknown, key: string, fallback: boolean) {
+    return this.optionalBooleanField(body, key) ?? fallback;
+  }
+
+  private optionalBooleanField(body: unknown, key: string) {
+    const value = typeof body === "object" && body !== null ? (body as Record<string, unknown>)[key] : undefined;
+    if (typeof value === "boolean") return value;
+    if (typeof value !== "string") return null;
+
+    const normalized = value.trim().toLowerCase();
+    if (["true", "1", "on", "yes"].includes(normalized)) return true;
+    if (["false", "0", "off", "no", ""].includes(normalized)) return false;
+    return null;
   }
 
   private boolNum(value: unknown) {

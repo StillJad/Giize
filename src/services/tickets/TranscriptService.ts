@@ -77,7 +77,7 @@ export class TranscriptService {
 
   private renderText(messages: Message[], metadata: TranscriptMetadata) {
     return [
-      "GIIZE EVENTS TICKET TRANSCRIPT",
+      "GLURPS EVENTS TICKET TRANSCRIPT",
       "",
       `Ticket: ${metadata.ticketNumber}`,
       `Channel: ${metadata.ticketChannel}`,

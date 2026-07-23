@@ -5,18 +5,11 @@ import { giizeEmbed } from "../../utils/embeds.js";
 type PlaceholderTarget = GuildMember | User;
 
 export const welcomeTitle = "Welcome, {username}! 👋";
-export const welcomeDescription = `We're glad you're here!
+export const welcomeDescription = `Welcome to Glurps Events!
 
-Here's everything you need to get started:
+Please make sure to read {rules} and keep an eye on {announcements} for event updates.
 
-📋 {rules}
-❓ {about}
-🎭 {roles}
-⚔️ {bedrock}
-📢 {announcements}
-💎 {ip}
-
-You're member #{membercount} of Giize Events.
+You're member #{membercount}.
 
 Enjoy your stay!`;
 
@@ -43,22 +36,12 @@ export class WelcomeRenderer {
       .replaceAll("{mention}", `${user}`)
       .replaceAll("{server}", guild?.name ?? "this server")
       .replaceAll("{membercount}", String(guild?.memberCount ?? 0))
-      .replaceAll("{rules}", this.channelMention(config.rulesChannelId))
-      .replaceAll("{about}", this.channelMention(config.aboutChannelId))
-      .replaceAll("{roles}", this.channelMention(config.rolesChannelId))
-      .replaceAll("{bedrock}", this.channelMention(config.bedrockChannelId))
-      .replaceAll("{announcements}", this.channelMention(config.announcementsChannelId))
-      .replaceAll("{ip}", this.channelMention(config.ipChannelId))
-      .replaceAll("{rules_channel}", this.channelMention(config.rulesChannelId))
-      .replaceAll("{about_channel}", this.channelMention(config.aboutChannelId))
-      .replaceAll("{roles_channel}", this.channelMention(config.rolesChannelId))
-      .replaceAll("{bedrock_channel}", this.channelMention(config.bedrockChannelId))
-      .replaceAll("{announcements_channel}", this.channelMention(config.announcementsChannelId))
-      .replaceAll("{ip_channel}", this.channelMention(config.ipChannelId));
+      .replaceAll("{rules}", this.channelMention(config.rulesChannelId, "the rules"))
+      .replaceAll("{announcements}", this.channelMention(config.announcementsChannelId, "announcements"));
   }
 
-  private channelMention(channelId: string) {
-    return channelId ? `<#${channelId}>` : "Not configured";
+  private channelMention(channelId: string, fallback: string) {
+    return channelId ? `<#${channelId}>` : fallback;
   }
 }
 

@@ -11,6 +11,11 @@ export class EventApplicationRouter {
         return;
       }
 
+      if (interaction.customId.startsWith("event_apply_form:")) {
+        await eventApplicationService.openGoogleForm(interaction, Number(interaction.customId.split(":")[1]));
+        return;
+      }
+
       if (interaction.customId.startsWith("event_app_accept:")) {
         await eventApplicationService.review(interaction, Number(interaction.customId.split(":")[1]), "accepted");
         return;

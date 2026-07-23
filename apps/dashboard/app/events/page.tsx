@@ -1,6 +1,7 @@
 import { revalidatePath } from "next/cache";
 import { botApi } from "../../lib/api";
 import { EventActionButtons } from "./EventActionButtons";
+import { EventApplicationSettingsFields } from "./EventApplicationSettingsFields";
 
 async function createEvent(formData: FormData) {
   "use server";
@@ -22,6 +23,16 @@ async function eventAction(formData: FormData) {
   revalidatePath("/events");
 }
 
+async function editEvent(formData: FormData) {
+  "use server";
+  const eventId = formData.get("eventId");
+  await botApi(`/events/${eventId}`, {
+    method: "PATCH",
+    body: JSON.stringify(Object.fromEntries(formData)),
+  });
+  revalidatePath("/events");
+}
+
 async function reviewApplication(formData: FormData) {
   "use server";
   await botApi(`/applications/${formData.get("applicationId")}`, {
@@ -34,10 +45,16 @@ async function reviewApplication(formData: FormData) {
 type EventRow = {
   eventNumber: number;
   title: string;
+  description: string;
   status: string;
   startTimestamp: number;
   endTimestamp: number;
   channelId: string;
+  pingRole: string | null;
+  goingRole: string | null;
+  verifyRequired: boolean;
+  googleFormsEnabled: boolean;
+  googleFormUrl: string | null;
   applications: { accepted: number; pending: number; rejected: number };
   acceptedParticipants: number;
 };
@@ -81,6 +98,7 @@ export default async function EventsPage() {
               <label><span>Ping role</span><select name="pingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
               <label><span>Going role</span><select name="goingRole"><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
             </div>
+            <EventApplicationSettingsFields />
             <button>Create Event</button>
           </form>
         </section>
@@ -88,21 +106,45 @@ export default async function EventsPage() {
       <section className="card" style={{ marginTop: "1rem" }}>
         <h2>Events</h2>
         <table className="table">
-          <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Start</th><th>Applications</th><th>Participants</th><th>Actions</th></tr></thead>
+          <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Start</th><th>Application Method</th><th>Verify</th><th>Applications</th><th>Participants</th><th>Actions</th></tr></thead>
           <tbody>{data.events.map(event => (
             <tr key={event.eventNumber}>
               <td>{event.eventNumber}</td>
               <td>{event.title}</td>
               <td><span className="pill">{event.status}</span></td>
               <td>{event.startTimestamp > 0 ? new Date(event.startTimestamp).toLocaleString() : "TBA"}</td>
+              <td>{event.googleFormsEnabled ? "Google Forms" : "Discord"}</td>
+              <td>{event.verifyRequired ? "Required" : "Optional"}</td>
               <td>{event.applications.accepted} accepted / {event.applications.pending} pending / {event.applications.rejected} rejected</td>
               <td>{event.acceptedParticipants}</td>
               <td>
                 {data.canManageEvents ? (
-                  <form action={eventAction}>
-                    <input type="hidden" name="eventId" value={event.eventNumber} />
-                    <EventActionButtons ended={event.status === "ended"} />
-                  </form>
+                  <div style={{ display: "grid", gap: "0.6rem" }}>
+                    <form action={eventAction}>
+                      <input type="hidden" name="eventId" value={event.eventNumber} />
+                      <EventActionButtons ended={event.status === "ended"} />
+                    </form>
+                    {event.status !== "ended" ? (
+                      <details>
+                        <summary className="channel-link">Edit</summary>
+                        <form className="form" action={editEvent} style={{ marginTop: "0.75rem" }}>
+                          <input type="hidden" name="eventId" value={event.eventNumber} />
+                          <label><span>Title</span><input name="title" defaultValue={event.title} required /></label>
+                          <label><span>Description</span><textarea name="description" defaultValue={event.description} required /></label>
+                          <div className="row">
+                            <label><span>Ping role</span><select name="pingRole" defaultValue={event.pingRole ?? ""}><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
+                            <label><span>Going role</span><select name="goingRole" defaultValue={event.goingRole ?? ""}><option value="">None</option>{data.roles.map(role => <option key={role.id} value={role.id}>{role.name}</option>)}</select></label>
+                          </div>
+                          <EventApplicationSettingsFields
+                            defaultVerifyRequired={event.verifyRequired}
+                            defaultGoogleForms={event.googleFormsEnabled}
+                            defaultGoogleFormUrl={event.googleFormUrl}
+                          />
+                          <button>Save Changes</button>
+                        </form>
+                      </details>
+                    ) : null}
+                  </div>
                 ) : <span className="muted">View only</span>}
               </td>
             </tr>

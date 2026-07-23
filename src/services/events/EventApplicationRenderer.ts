@@ -8,7 +8,7 @@ import type { EventRecord } from "./EventRenderer.js";
 
 export type EventApplicationStatus = "pending" | "accepted" | "rejected";
 export type EventApplicationPriority = "Diamond" | "Iron" | "Dirt" | "Normal";
-export type EventApplicationPlatform = "Java" | "Bedrock";
+export type EventApplicationPlatform = "Java" | "Bedrock" | "Unverified";
 
 export type EventApplicationRecord = {
   id: number;
@@ -28,13 +28,16 @@ export type EventApplicationRecord = {
 
 export class EventApplicationRenderer {
   renderTicketEmbed(event: EventRecord, application: EventApplicationRecord, mode: "automatic" | "manual" = "manual") {
+    const minecraftAccount = application.platform === "Unverified"
+      ? "Not verified"
+      : application.minecraftUsername;
     const embed = giizeEmbed()
       .setTitle("Event Application")
       .addFields(
         { name: "Event ID", value: `${event.eventNumber}`, inline: true },
         { name: "Event Name", value: event.title, inline: true },
         { name: "Applicant", value: `<@${application.discordId}>`, inline: true },
-        { name: "Minecraft Username", value: application.minecraftUsername, inline: true },
+        { name: "Minecraft Account", value: minecraftAccount, inline: true },
         { name: "Platform", value: application.platform, inline: true },
         { name: "Priority", value: application.priority, inline: true },
         { name: "Status", value: this.statusLabel(application.status, mode), inline: false },
@@ -69,6 +72,9 @@ export class EventApplicationRenderer {
   }
 
   renderLogEmbed(event: EventRecord, application: EventApplicationRecord, action: string, reviewerId: string | null, automatic: boolean) {
+    const minecraftAccount = application.platform === "Unverified"
+      ? "Not verified"
+      : application.minecraftUsername;
     return giizeEmbed()
       .setTitle("Event Application")
       .addFields(
@@ -76,7 +82,7 @@ export class EventApplicationRenderer {
         { name: "Event ID", value: `${event.eventNumber}`, inline: true },
         { name: "Event Name", value: event.title, inline: true },
         { name: "Applicant", value: `<@${application.discordId}>`, inline: true },
-        { name: "Minecraft Username", value: application.minecraftUsername, inline: true },
+        { name: "Minecraft Account", value: minecraftAccount, inline: true },
         { name: "Platform", value: application.platform, inline: true },
         { name: "Priority", value: application.priority, inline: true },
         { name: "Status", value: this.statusLabel(application.status, automatic ? "automatic" : "manual"), inline: true },

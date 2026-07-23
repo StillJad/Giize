@@ -25,6 +25,7 @@ import {
   type EventStatus,
   type RsvpStatus,
 } from "./EventRenderer.js";
+import { normalizeGoogleFormUrl } from "./EventApplicationSettings.js";
 
 type EventRow = {
   id: number;
@@ -41,6 +42,9 @@ type EventRow = {
   max_players: number | null;
   ping_role: string | null;
   going_role: string | null;
+  verify_required: number;
+  google_forms_enabled: number;
+  google_form_url: string | null;
   status: EventStatus;
   created_at: number;
 };
@@ -78,6 +82,9 @@ type EventCreateInput = {
   maxPlayers: number | null;
   pingRole: Role | null;
   goingRole: Role | null;
+  verifyRequired: boolean;
+  googleFormsEnabled: boolean;
+  googleFormUrl: string | null;
   channel: TextChannel;
 };
 
@@ -92,6 +99,9 @@ type EventEditInput = {
   maxPlayers: number | null;
   pingRole: Role | null;
   goingRole: Role | null;
+  verifyRequired: boolean | null;
+  googleFormsEnabled: boolean | null;
+  googleFormUrl: string | null;
 };
 
 export class EventService {
@@ -107,6 +117,12 @@ export class EventService {
 
     if (!this.canSendEvent(interaction.guild, input.channel)) {
       await safeEdit(interaction, { content: "❌ I can't send embeds and buttons in that channel." });
+      return;
+    }
+
+    const googleFormUrl = normalizeGoogleFormUrl(input.googleFormUrl);
+    if (input.googleFormsEnabled && !googleFormUrl) {
+      await safeEdit(interaction, { content: "Please provide a valid Google Forms link." });
       return;
     }
 
@@ -126,9 +142,10 @@ export class EventService {
     const insert = sqlite.prepare(`
       INSERT INTO events (
         event_number, guild_id, message_id, channel_id, host_id, title, description, location,
-        start_timestamp, end_timestamp, max_players, ping_role, going_role, status, created_at
+        start_timestamp, end_timestamp, max_players, ping_role, going_role, verify_required,
+        google_forms_enabled, google_form_url, status, created_at
       )
-      VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)
+      VALUES (?, ?, '', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'scheduled', ?)
     `).run(
       eventNumber,
       interaction.guild.id,
@@ -142,6 +159,9 @@ export class EventService {
       input.maxPlayers,
       input.pingRole?.id ?? null,
       input.goingRole?.id ?? null,
+      input.verifyRequired ? 1 : 0,
+      input.googleFormsEnabled ? 1 : 0,
+      input.googleFormsEnabled ? googleFormUrl : null,
       now
     );
 
@@ -189,6 +209,16 @@ export class EventService {
     const nextDuration = input.duration ?? (event.endTimestamp > 0
       ? `${Math.max(1, Math.round((event.endTimestamp - event.startTimestamp) / 60000))}m`
       : null);
+    const nextGoogleFormsEnabled = input.googleFormsEnabled ?? event.googleFormsEnabled;
+    const nextGoogleFormUrl = nextGoogleFormsEnabled
+      ? normalizeGoogleFormUrl(input.googleFormUrl ?? event.googleFormUrl)
+      : null;
+
+    if (nextGoogleFormsEnabled && !nextGoogleFormUrl) {
+      await safeEdit(interaction, { content: "Please provide a valid Google Forms link." });
+      return;
+    }
+
     const parsedTime = this.parseEventTime(nextDate, nextTime, nextDuration);
 
     if (!parsedTime) {
@@ -201,7 +231,8 @@ export class EventService {
     sqlite.prepare(`
       UPDATE events
       SET title = ?, description = ?, location = ?, start_timestamp = ?, end_timestamp = ?,
-          max_players = ?, ping_role = ?, going_role = ?
+          max_players = ?, ping_role = ?, going_role = ?, verify_required = ?,
+          google_forms_enabled = ?, google_form_url = ?
       WHERE id = ?
     `).run(
       input.title ?? event.title,
@@ -212,6 +243,9 @@ export class EventService {
       input.maxPlayers ?? event.maxPlayers,
       input.pingRole?.id ?? event.pingRole,
       input.goingRole?.id ?? event.goingRole,
+      (input.verifyRequired ?? event.verifyRequired) ? 1 : 0,
+      nextGoogleFormsEnabled ? 1 : 0,
+      nextGoogleFormUrl,
       event.id
     );
 
@@ -751,7 +785,7 @@ export class EventService {
     const exportedAt = new Date().toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
 
     await writeFile(filePath, [
-      "GIIZE EVENTS PARTICIPANT EXPORT",
+      "GLURPS EVENTS PARTICIPANT EXPORT",
       "",
       `Event ID: ${event.eventNumber}`,
       `Event: ${event.title}`,
@@ -896,6 +930,9 @@ export class EventService {
       maxPlayers: row.max_players,
       pingRole: row.ping_role,
       goingRole: row.going_role,
+      verifyRequired: Boolean(row.verify_required),
+      googleFormsEnabled: Boolean(row.google_forms_enabled),
+      googleFormUrl: row.google_form_url,
       status: row.status,
       createdAt: row.created_at,
     };

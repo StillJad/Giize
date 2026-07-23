@@ -52,7 +52,7 @@ export default async function WelcomePage() {
               <h3>{previewTitle}</h3>
               <p>{previewDescription}</p>
               {config.image_url ? <img src={String(config.image_url)} alt="" /> : null}
-              <small>Giize Bot</small>
+              <small>Glurps Bot</small>
             </div>
           </div>
         </section>
@@ -66,11 +66,7 @@ function resolvePlaceholders(value: string) {
     .replaceAll("{username}", "StillJad")
     .replaceAll("{mention}", "@StillJad")
     .replaceAll("{membercount}", "239")
-    .replaceAll("{server}", "Giize Events")
+    .replaceAll("{server}", "Glurps Events")
     .replaceAll("{rules}", "#rules")
-    .replaceAll("{about}", "#about")
-    .replaceAll("{roles}", "#roles")
-    .replaceAll("{bedrock}", "#bedrock")
-    .replaceAll("{announcements}", "#announcements")
-    .replaceAll("{ip}", "#server-ip");
+    .replaceAll("{announcements}", "#announcements");
 }

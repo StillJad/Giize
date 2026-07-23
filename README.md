@@ -1,6 +1,6 @@
-# Giize Bot
+# Glurps Bot
 
-Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Minecraft server utilities, event applications, tickets, welcome messages, Minecraft account verification, AutoMod, audit logs, and a private web dashboard.
+Glurps Bot is a Discord.js v14 bot for Glurps Events communities. It includes Minecraft server utilities, event applications, tickets, welcome messages, Minecraft account verification, AutoMod, audit logs, and a private web dashboard.
 
 ## Features
 
@@ -12,7 +12,7 @@ Giize Bot is a Discord.js v14 bot for Giize Events communities. It includes Mine
 - Configurable AutoMod for spam, duplicate messages, mentions, emojis, invites, links, and banned words.
 - Minecraft server IP and status commands.
 - SQLite persistence for events, participants, welcome settings, tickets, and counters.
-- Web dashboard with Discord OAuth, server overview, welcome/ticket/event/AutoMod/logging settings, and bot health.
+- Public Glurps.net landing page plus a private web dashboard with Discord OAuth, server overview, welcome/ticket/event/AutoMod/logging settings, and bot health.
 
 ## Installation
 
@@ -46,7 +46,12 @@ docker compose down
 
 The SQLite database is stored in `./data` on the host and mounted to `/app/data` in the container.
 
-The dashboard runs as `giize-dashboard` and talks to the bot over the private Compose network at `http://giize-bot:3001`. The bot API is not published directly to the host.
+The dashboard/web service runs as `giize-dashboard` and talks to the bot over the private Compose network at `http://giize-bot:3001`. The bot API is not published directly to the host.
+
+The same Next.js service serves:
+
+- `https://glurps.net` as the public landing page.
+- `https://dashboard.glurps.net` as the authenticated dashboard.
 
 Dashboard commands:
 
@@ -62,23 +67,29 @@ For local OAuth development, use:
 http://localhost:3000/api/auth/callback/discord
 ```
 
-### Nginx Dashboard Example
+### Nginx Glurps.net Example
 
-Create a separate Nginx site for your dashboard domain. Do not overwrite existing Cockpit or VPS configuration.
+Create a separate Nginx site for Glurps.net and the dashboard subdomain. Do not overwrite existing Cockpit or VPS configuration. A ready-to-copy example lives at `nginx/glurps.example.conf`.
 
 ```nginx
 server {
     listen 80;
-    server_name dashboard.example.com;
+    server_name www.glurps.net;
+    return 301 https://glurps.net$request_uri;
+}
+
+server {
+    listen 80;
+    server_name glurps.net dashboard.glurps.net;
     return 301 https://$host$request_uri;
 }
 
 server {
     listen 443 ssl http2;
-    server_name dashboard.example.com;
+    server_name glurps.net;
 
-    ssl_certificate /etc/letsencrypt/live/dashboard.example.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/dashboard.example.com/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/glurps.net/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/glurps.net/privkey.pem;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -93,6 +104,8 @@ server {
     }
 }
 ```
+
+DNS note: the current notes say `glurps.net` and wildcard subdomains point to `162.213.198.42`, while the current Glurps VPS public IPv4 is `85.190.101.48`. Point the website DNS to the VPS that actually hosts the dashboard before enabling HTTPS/Nginx. Do not change the Minecraft SRV record unless you intentionally move the Minecraft service.
 
 ## Required Intents
 
@@ -152,11 +165,7 @@ Production configuration:
 - `WELCOME_BANNER_URL`
 - `WELCOME_ROLE_ID`
 - `RULES_CHANNEL_ID`
-- `ABOUT_CHANNEL_ID`
-- `ROLES_CHANNEL_ID`
-- `BEDROCK_CHANNEL_ID`
 - `ANNOUNCEMENTS_CHANNEL_ID`
-- `IP_CHANNEL_ID`
 - `SERVER_IP`
 - `SERVER_PORT`
 - `DISCORD_CLIENT_ID`
@@ -165,7 +174,10 @@ Production configuration:
 - `DASHBOARD_SESSION_SECRET`
 - `DASHBOARD_INTERNAL_SECRET`
 - `DASHBOARD_GUILD_ID`
+- `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_DASHBOARD_URL`
+- `NEXT_PUBLIC_DISCORD_INVITE_URL`
+- `NEXT_PUBLIC_MINECRAFT_ADDRESS`
 - `DASHBOARD_HOST_PORT`
 - `DASHBOARD_API_PORT`
 
@@ -193,7 +205,7 @@ Events:
 - `/event edit`
 - `/event delete`
 - `/event end`
-- `/event list`
+- `/events list`
 - `/participants`
 
 Tickets:

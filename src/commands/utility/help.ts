@@ -6,7 +6,7 @@ import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("help")
-    .setDescription("Shows Giize Bot commands."),
+    .setDescription("Shows Glurps Bot commands."),
   async execute(interaction) {
     const admin = isAdministrator(interaction.member);
     const staff = hasStaffRole(interaction.member);
@@ -23,7 +23,7 @@ export const command: Command = {
     ].filter(Boolean).join(" ");
 
     const embed = giizeEmbed()
-      .setTitle("Giize Bot Help")
+      .setTitle("Glurps Bot Help")
       .setDescription("Your Minecraft event server assistant.")
       .addFields(
         { name: "General", value: "`/help` `/ping`" },
