@@ -351,7 +351,7 @@ export class AutoModService {
         entry.content === normalized && message.createdTimestamp - entry.createdAt <= 20_000
       ).length;
 
-      if (duplicateCount >= 3) {
+      if (duplicateCount >= 20) {
         return {
           rule: "Duplicate Messages",
           reason: "Repeated duplicate messages.",
