@@ -45,6 +45,10 @@ if(process.argv.includes('--check')) {
  const settings=configureEngine();
  write('general.jsonc',settings.general);write('options.jsonc',settings.options);write('panels.jsonc',[settings.panel]);write('questions.jsonc',[settings.question]);write('transcripts.jsonc',settings.transcripts);
  const state=resolve(root,'data/openticket');mkdirSync(state,{recursive:true});
+ for(const name of ['global','options','states','stats','tickets','users']) {
+  const file=resolve(state,`${name}.json`);
+  if(!existsSync(file)) writeFileSync(file,'[]\n',{flag:'wx'});
+ }
  if(!existsSync(resolve(engine,'database'))) symlinkSync(state,resolve(engine,'database'),'dir');
  process.chdir(engine);
  await import(pathToFileURL(resolve(engine,'dist/src/index.js')).href);
