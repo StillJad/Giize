@@ -6,7 +6,7 @@ dist
 .env
 .env.*
 !.env.example
-data
+/data
 vendor/open-ticket/database
 vendor/open-ticket/devdatabase
 **/*.log
