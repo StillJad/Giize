@@ -1,4 +1,5 @@
 import type { Client } from "discord.js";
+import { logger } from "../../utils/logger.js";
 import { eventService } from "./EventService.js";
 
 export class ReminderService {
@@ -13,11 +14,20 @@ export class ReminderService {
     }, 60_000);
   }
 
+  stop() {
+    if (this.interval) clearInterval(this.interval);
+    this.interval = undefined;
+  }
+
   private async tick(client: Client) {
+    try {
     const reminders = eventService.getDueReminders(Date.now());
 
     for (const reminder of reminders) {
       await eventService.sendReminder(client, reminder.event, reminder.key, reminder.label);
+    }
+    } catch (error) {
+      logger.error("Event reminder failed.", error);
     }
   }
 }

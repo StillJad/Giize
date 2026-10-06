@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import type { Command } from "../../types/Command.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import { hasStaffRole, isAdministrator } from "../../utils/permissions.js";
 
 export const command: Command = {
@@ -22,7 +22,7 @@ export const command: Command = {
       admin ? "`/adminmod` `/channel` `/purge`" : "",
     ].filter(Boolean).join(" ");
 
-    const embed = giizeEmbed()
+    const embed = glurpsEmbed()
       .setTitle("Glurps Bot Help")
       .setDescription("Your Minecraft event server assistant.")
       .addFields(
@@ -32,7 +32,8 @@ export const command: Command = {
         { name: "Tickets", value: ticketCommands },
         { name: "Events", value: eventCommands },
         { name: "Moderation", value: moderationCommands || "Available to staff only." },
-        { name: "Dashboard", value: management ? "Use the web dashboard for Welcome, AutoMod, Verification, Logging, and tools." : "Available to staff in the web dashboard." }
+        { name: "Management", value: "`/automod` `/cases` `/applications` `/levels`" },
+        { name: "Support Tickets", value: "`/panel id:support` · Open Ticket manages claiming, reopening, priorities, transcripts and inactivity closing." }
       );
 
     await interaction.reply({ embeds: [embed], flags: 64 });

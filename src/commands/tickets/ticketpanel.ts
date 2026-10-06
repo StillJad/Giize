@@ -6,7 +6,7 @@ import {
   StringSelectMenuBuilder,
   type TextChannel,
 } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import type { Command } from "../../types/Command.js";
 import { ticketService } from "../../services/tickets/TicketService.js";
 import { logger } from "../../utils/logger.js";
@@ -63,7 +63,7 @@ export const command: Command = {
 
       await channel.send({
         embeds: [
-          giizeEmbed()
+          glurpsEmbed()
             .setTitle(title)
             .setDescription(description),
         ],

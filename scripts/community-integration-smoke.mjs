@@ -1,0 +1,41 @@
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {EventEmitter} from 'node:events';
+import {PermissionFlagsBits,PermissionsBitField} from 'discord.js';
+import {installAdministratorDispatcher,calculateAdministratorAccess} from '../vendor/open-ticket/dist/plugins/glurps/policy.js';
+const directory=mkdtempSync(join(tmpdir(),'glurps-community-'));
+process.env.DATABASE_PATH=join(directory,'test.db');
+const {sqlite}=await import('../dist/database/database.js');
+const {levelService,levelForXp,xpForLevel}=await import('../dist/services/community/LevelService.js');
+const {caseService}=await import('../dist/services/moderation/CaseService.js');
+try {
+ for(let i=0;i<100;i++){assert.equal(levelForXp(xpForLevel(i)),i);if(i)assert.equal(levelForXp(xpForLevel(i)-1),i-1);}
+ assert.equal(levelService.settings('guild').reward_level,25);
+ assert.equal(levelService.settings('guild').reward_role,'1515691359862915162');
+ assert(levelService.award('guild','user','a useful message',100000));
+ assert(!levelService.award('guild','user','another useful message',120000));
+ assert(!levelService.award('guild','user','a useful message',200000));
+ assert(levelService.award('guild','user','different useful message',200000));
+ assert.equal(levelService.get('guild','user').xp,40);
+ assert.equal(caseService.record('guild','user','admin','Warning','Reason'),1);
+ assert.equal(caseService.record('guild','user','admin','Timeout','Reason','10m'),2);
+ assert.equal(caseService.record('other','user','admin','Warning','Reason'),1);
+ assert(caseService.edit('guild',1,'admin','Updated reason'));
+ assert.equal(sqlite.prepare('SELECT COUNT(*) AS count FROM moderation_case_edits').get().count,1);
+ const adminGuild={members:{fetch:async()=>({permissions:new PermissionsBitField(PermissionFlagsBits.Administrator)})}};
+ assert.equal((await calculateAdministratorAccess({id:"admin"},null,adminGuild)).level,3);
+ assert.equal((await calculateAdministratorAccess({id:"user"},null,{members:{fetch:async()=>({permissions:new PermissionsBitField()})}})).level,0);
+ const client=new EventEmitter();let handled=0;let denied=0;
+ const manager={getFiltered:fn=>[{id:'opendiscord:close',name:'close'},{id:'glurps:event',name:'event'}].filter(fn),interactionListeners:[{name:'close',callback:()=>handled++}]};
+ installAdministratorDispatcher(manager,client);manager.startListeningToInteractions();
+ const input={isChatInputCommand:()=>true,commandName:'close',inGuild:()=>true,memberPermissions:new PermissionsBitField(),reply:async()=>denied++};
+ client.emit('interactionCreate',input);assert.equal(handled,0);assert.equal(denied,1);
+ client.emit('interactionCreate',{...input,memberPermissions:new PermissionsBitField(PermissionFlagsBits.Administrator)});assert.equal(handled,1);
+ client.emit('interactionCreate',{...input,commandName:'event'});assert.equal(denied,1,'Custom commands must be handled only by Glurps');
+ let rolePermissions;
+ const guild={id:'guild',roles:{fetch:async()=>({managed:false,editable:true,permissions:new PermissionsBitField(),setPermissions:async value=>rolePermissions=value})}};
+ await levelService.prepareReward(guild);assert(new PermissionsBitField(rolePermissions).has(PermissionFlagsBits.EmbedLinks));
+ console.log('XP cooldown, repeats, level-25 role, Embed Links, case history, and Open Ticket command isolation checks passed.');
+} finally {sqlite.close();rmSync(directory,{recursive:true,force:true});}

@@ -39,7 +39,11 @@ type TicketChannelClassification =
 
 const noReasonProvided = "No reason provided.";
 
+sqlite.exec(`CREATE TABLE IF NOT EXISTS ticket_claims (channel_id TEXT PRIMARY KEY, guild_id TEXT NOT NULL, admin_id TEXT NOT NULL, claimed_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS ticket_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id TEXT NOT NULL, channel_id TEXT NOT NULL, actor_id TEXT NOT NULL, action TEXT NOT NULL, created_at INTEGER NOT NULL);`);
+
 export class TicketService {
+  private readonly closing = new Set<string>();
   private readonly activeTickets = new Map<string, ActiveTicket>();
   private readonly openingTickets = new Set<string>();
 
@@ -156,8 +160,10 @@ export class TicketService {
           }),
         ],
         components: [this.closeTicketRow()],
+        allowedMentions: { users:[userId],roles:config.staffRoleId?[config.staffRoleId]:[],parse:[] },
       });
 
+      this.audit(guild.id,ticketChannel.id,userId,"Opened");
       await safeEdit(interaction, { content: `✅ Ticket created: ${ticketChannel}` });
     } finally {
       this.openingTickets.delete(userId);
@@ -252,7 +258,39 @@ export class TicketService {
   }
 
   async requestClose(interaction: ButtonInteraction) {
-    await this.closeFromButton(interaction, noReasonProvided);
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) || !this.hasStandardTicketMetadata(interaction.channel)) {
+      await safeReply(interaction, {content:"Only administrators can close support tickets.",flags:64}); return;
+    }
+    await safeReply(interaction,{content:"Close this ticket? A transcript will be saved before deletion.",flags:64,components:[new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId(`ticket_confirm:${interaction.user.id}:${interaction.channelId}:${Date.now()}`).setLabel("Confirm Close").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId(`ticket_cancel:${interaction.user.id}`).setLabel("Cancel").setStyle(ButtonStyle.Secondary))]});
+  }
+
+  async handleManagementButton(interaction: ButtonInteraction) {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {await safeReply(interaction,{content:"Administrator permission required.",flags:64});return;}
+    if (interaction.customId.startsWith("ticket_cancel:")) {
+      if (interaction.customId.split(":")[1]!==interaction.user.id) return;
+      await interaction.update({content:"Cancelled.",components:[]}); return;
+    }
+    if (interaction.customId.startsWith("ticket_confirm:")) {
+      const [,user,channel,created]=interaction.customId.split(":");
+      if(user!==interaction.user.id || channel!==interaction.channelId || Date.now()-Number(created)>60000) {await safeReply(interaction,{content:"Confirmation expired. Click Close again.",flags:64});return;}
+      await interaction.update({content:"Saving transcript and closing…",components:[]});
+      await this.close(interaction,noReasonProvided);return;
+    }
+    if(!this.hasStandardTicketMetadata(interaction.channel) || !interaction.guildId) {await safeReply(interaction,{content:"Use this inside a support ticket.",flags:64});return;}
+    const claim=sqlite.prepare("SELECT admin_id FROM ticket_claims WHERE channel_id=?").get(interaction.channelId) as {admin_id:string}|undefined;
+    const release=interaction.customId==='ticket_unclaim';
+    if(release && claim?.admin_id!==interaction.user.id){await safeReply(interaction,{content:"Only the assigned administrator can release this ticket.",flags:64});return;}
+    if(!release && claim){await safeReply(interaction,{content:`Already assigned to <@${claim.admin_id}>.`,flags:64});return;}
+    if(release) sqlite.prepare("DELETE FROM ticket_claims WHERE channel_id=?").run(interaction.channelId);
+    else sqlite.prepare("INSERT INTO ticket_claims VALUES (?,?,?,?)").run(interaction.channelId,interaction.guildId,interaction.user.id,Date.now());
+    this.audit(interaction.guildId,interaction.channelId,interaction.user.id,release?'Unclaimed':'Claimed');
+    await interaction.reply({content:release?'Ticket released.':`Ticket assigned to <@${interaction.user.id}>.`,allowedMentions:{parse:[]}});
+  }
+
+  private audit(guildId:string,channelId:string,actorId:string,action:string) {
+    sqlite.prepare("INSERT INTO ticket_audit(guild_id,channel_id,actor_id,action,created_at) VALUES (?,?,?,?,?)").run(guildId,channelId,actorId,action,Date.now());
   }
 
   async requestCloseReason(interaction: ButtonInteraction) {
@@ -285,7 +323,14 @@ export class TicketService {
     await this.close(interaction, interaction.fields.getTextInputValue("closeReason"));
   }
 
-  private async close(
+  private async close(interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction, reason: string) {
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {await safeEdit(interaction,{content:"Administrator permission required."});return;}
+    if(this.closing.has(interaction.channelId!)) {await safeEdit(interaction,{content:"Ticket is already closing."});return;}
+    this.closing.add(interaction.channelId!);
+    try {await this.closeUnlocked(interaction,reason);} finally {this.closing.delete(interaction.channelId!);}
+  }
+
+  private async closeUnlocked(
     interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction,
     closingReasonInput: string
   ) {
@@ -380,7 +425,8 @@ export class TicketService {
       | undefined;
 
     try {
-      transcriptFile = await transcriptService.createTempFile(transcript, ticket.ticketNumber);
+      try { transcriptFile = await transcriptService.createHtmlFile(channel, ticket.ticketNumber); }
+      catch (error) { logger.warn("HTML transcript failed; saving text transcript.",error); transcriptFile = await transcriptService.createTempFile(transcript, ticket.ticketNumber); }
     } catch (error) {
       logger.warn("Failed to save ticket transcript file. Continuing close flow.", error);
     }
@@ -388,9 +434,8 @@ export class TicketService {
     await this.sendTicketLog(interaction.guild, log, transcriptFile);
     await this.sendCreatorDm(interaction, ticket.creatorId, log, transcriptFile);
 
-    if (transcriptFile) {
-      await transcriptService.removeTempFile(transcriptFile);
-    }
+    this.audit(interaction.guild.id,channel.id,interaction.user.id,`Closed: ${closingReason}; transcript: ${transcriptFile?.filename ?? "unavailable"}`);
+    sqlite.prepare("DELETE FROM ticket_claims WHERE channel_id=?").run(channel.id);
 
     this.activeTickets.delete(channel.id);
 
@@ -403,6 +448,8 @@ export class TicketService {
 
   private closeTicketRow() {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setEmoji("👋").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("ticket_close")
         .setLabel("Close")

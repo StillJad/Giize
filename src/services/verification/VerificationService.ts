@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import { GuildMember, type Guild } from "discord.js";
 import { config } from "../../config/config.js";
 import { sqlite } from "../../database/database.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import { logger } from "../../utils/logger.js";
 
 export type VerificationPlatform = "java" | "bedrock";
@@ -73,21 +73,21 @@ export class VerificationService {
   }
 
   static failureEmbed() {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Verification Failed")
       .setDescription("That Minecraft username could not be found.\n\nPlease double-check the spelling and try again.")
       .setFooter({ text: "Glurps Events Verification System" });
   }
 
   static bedrockFailureEmbed() {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Verification Failed")
       .setDescription("That Bedrock gamertag format is invalid.\n\nPlease double-check the spelling and try again.")
       .setFooter({ text: "Glurps Events Verification System" });
   }
 
   static saveFailureEmbed() {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Verification Failed")
       .setDescription("Verification could not be saved. Please try again.")
       .setFooter({ text: "Glurps Events Verification System" });
@@ -283,7 +283,7 @@ export class VerificationService {
 
     await channel.send({
       embeds: [
-        giizeEmbed()
+        glurpsEmbed()
           .setTitle("✅ Member Verified")
           .addFields(
             { name: "Discord Member", value: `${member}`, inline: true },

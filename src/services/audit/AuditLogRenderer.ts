@@ -1,9 +1,9 @@
 import type { APIEmbedField } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 export class AuditLogRenderer {
   render(title: string, fields: APIEmbedField[]) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle(title)
       .addFields(fields.map(field => ({
         ...field,

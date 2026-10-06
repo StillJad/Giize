@@ -6,6 +6,14 @@ import { eventApplicationService } from "./EventApplicationService.js";
 export class EventApplicationRouter {
   async handleButton(interaction: ButtonInteraction) {
     try {
+      if (interaction.customId.startsWith("event_app_edit:")) {
+        await eventApplicationService.editUsername(interaction, Number(interaction.customId.split(":")[1]));
+        return;
+      }
+      if (interaction.customId.startsWith("event_app_reset:")) {
+        await eventApplicationService.review(interaction, Number(interaction.customId.split(":")[1]), "pending");
+        return;
+      }
       if (interaction.customId.startsWith("event_apply:")) {
         await eventApplicationService.openModal(interaction, Number(interaction.customId.split(":")[1]));
         return;
@@ -34,6 +42,10 @@ export class EventApplicationRouter {
 
   async handleModal(interaction: ModalSubmitInteraction) {
     try {
+      if (interaction.customId.startsWith("event_app_username:")) {
+        await eventApplicationService.saveUsername(interaction);
+        return true;
+      }
       if (!interaction.customId.startsWith("event_application:")) return false;
       await eventApplicationService.submit(interaction);
       return true;

@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {Collection} from 'discord.js';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+const directory=mkdtempSync(join(tmpdir(),'glurps-automod-'));
+process.env.DATABASE_PATH=join(directory,'test.db');
+const {sqlite}=await import('../dist/database/database.js');
+const {AutoModService}=await import('../dist/services/automod/AutoModService.js');
+try {
+ const service=new AutoModService();
+ service.initializeForGuild('guild');
+ assert.equal(service.getConfig('guild').enabled,true);
+ sqlite.prepare('UPDATE automod_configs SET enabled=0 WHERE guild_id=?').run('guild');
+ service.initializeForGuild('guild');
+ assert.equal(service.getConfig('guild').enabled,false,'Explicit disable must survive restart');
+ sqlite.prepare('UPDATE automod_configs SET enabled=1 WHERE guild_id=?').run('guild');
+ service.invalidateGuild('guild');
+ const settings=service.getConfig('guild');
+ const message={content:'hello',guild:{id:'guild'},author:{id:'user'},channel:{id:'channel'},mentions:{users:new Collection(),roles:new Collection(),everyone:false},createdTimestamp:Date.now()};
+ assert.equal(await service.detectViolation(message,settings),null);
+ const blocked={...settings,bannedWords:[{word:'blocked',matchType:'exact'}]};
+ assert.equal((await service.detectViolation({...message,content:'blocked'},blocked)).rule,'Banned Word');
+ const mentions={...message,mentions:{...message.mentions,users:new Collection(Array.from({length:6},(_,i)=>[String(i),{id:String(i)}]))}};
+ assert.equal((await service.detectViolation(mentions,settings)).rule,'Excessive Mentions');
+ let violation;
+ for(let i=0;i<7;i++) violation=await service.detectViolation({...message,content:`spam ${i}`},settings);
+ assert(violation,'Rapid spam should trigger filtering');
+ console.log('AutoMod activation, persistent disable, blocked words, mention limits, and spam checks passed.');
+} finally {sqlite.close();rmSync(directory,{recursive:true,force:true});}

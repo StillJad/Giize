@@ -1,6 +1,6 @@
 import type { GuildMember, User } from "discord.js";
 import { config } from "../../config/config.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 type PlaceholderTarget = GuildMember | User;
 
@@ -15,7 +15,7 @@ Enjoy your stay!`;
 
 export class WelcomeRenderer {
   render(target: PlaceholderTarget) {
-    const embed = giizeEmbed()
+    const embed = glurpsEmbed()
       .setTitle(this.replacePlaceholders(welcomeTitle, target))
       .setDescription(this.replacePlaceholders(welcomeDescription, target));
 

@@ -2,7 +2,7 @@ import { SlashCommandBuilder, GuildMember } from "discord.js";
 import { config } from "../../config/config.js";
 import { verificationService } from "../../services/verification/VerificationService.js";
 import type { Command } from "../../types/Command.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
@@ -36,7 +36,7 @@ export const command: Command = {
       if (channel?.isTextBased()) {
         await channel.send({
           embeds: [
-            giizeEmbed()
+            glurpsEmbed()
               .setTitle("❌ Member Unverified")
               .addFields(
                 { name: "Discord", value: `${member}`, inline: true },

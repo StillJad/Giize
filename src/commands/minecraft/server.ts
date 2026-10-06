@@ -1,6 +1,6 @@
 import { SlashCommandBuilder } from "discord.js";
 import type { Command } from "../../types/Command.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import { config } from "../../config/config.js";
 
 export const command: Command = {
@@ -8,7 +8,7 @@ export const command: Command = {
     .setName("server")
     .setDescription("Shows the Glurps Events Minecraft server IP."),
   async execute(interaction) {
-    const embed = giizeEmbed()
+    const embed = glurpsEmbed()
       .setTitle("Glurps Events Server")
       .addFields(
         { name: "IP", value: `\`${config.mcHost}\``, inline: true },

@@ -1,5 +1,5 @@
 import { type APIEmbedField, type GuildMember, type User } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 export type ModerationLogData = {
   action: string;
@@ -12,7 +12,7 @@ export type ModerationLogData = {
 
 export class ModerationRenderer {
   warningDm(moderator: GuildMember, reason: string) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Moderation Warning")
       .setDescription(`You received a warning in ${moderator.guild.name}.`)
       .addFields(
@@ -22,14 +22,14 @@ export class ModerationRenderer {
   }
 
   actionDm(title: string, guildName: string, reason: string) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle(title)
       .setDescription(`This action was taken in ${guildName}.`)
       .addFields({ name: "Reason", value: reason, inline: false });
   }
 
   warnings(target: User, fields: APIEmbedField[]) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Moderation Warnings")
       .setDescription(`Active warnings for ${target}.`)
       .addFields(fields.length > 0 ? fields : [{ name: "No Warnings", value: "This member has no active warnings." }]);

@@ -1,257 +1,64 @@
-# Glurps Bot
+# Glurps Bot v2
 
-Glurps Bot is a Discord.js v14 bot for Glurps Events communities. It includes Minecraft server utilities, event applications, tickets, welcome messages, Minecraft account verification, AutoMod, audit logs, and a private web dashboard.
+A Discord-only bot built on **Open Ticket v4.2.2**, with Glurps event applications, moderation, AutoMod, and community leveling attached to the same Discord client. No web dashboard. Full Open Ticket source, its GPL license, and attribution are included.
 
 ## Features
 
-- Event creation, RSVP tracking, participant exports, live embed updates, Going roles, logs, and reminders.
-- Simple private ticket channels with plain text transcripts.
-- Welcome embeds with placeholders and optional join roles.
-- Minecraft Java/Bedrock verification with Java account lookup, confirmation buttons, nickname updates, platform roles, and logs.
-- Discord audit logging for messages, members, moderation, roles, channels, threads, voice, invites, and server updates.
-- Configurable AutoMod for spam, duplicate messages, mentions, emojis, invites, links, and banned words.
-- Minecraft server IP and status commands.
-- SQLite persistence for events, participants, welcome settings, tickets, and counters.
-- Public Glurps.net landing page plus a private web dashboard with Discord OAuth, server overview, welcome/ticket/event/AutoMod/logging settings, and bot health.
+- Open Ticket support/report/appeal panels: claiming, releasing, reopening, moving, pinning, priorities, participants, limits, cooldowns, statistics, inactivity closing, and transcripts.
+- Local HTML transcripts using discord-html-transcripts. Copies are saved in `data/transcripts`; the upstream external transcript service is not used.
+- Event application tickets with optional questions and Accept/Deny/Set Pending/Edit Username buttons. Decisions remain editable until the event ends and synchronize participants and Going roles.
+- Event ending deletes only its application tickets. Application records and audit history remain.
+- Administrator-only slash commands with runtime enforcement, including the Open Ticket commands. Members interact through public panels.
+- Public Minecraft verification panel, Java/Bedrock account linking, nicknames, and platform roles.
+- AutoMod for spam, repeats, mentions, emojis, invites, blocked words, and optional domain filtering; all configured through `/automod`.
+- Numbered moderation cases, member history, reason corrections with edit history, bans, kicks, timeouts, warnings, channel controls, and purge.
+- Application summary and JSON export.
+- XP, rank, top-ten leaderboard, and an Embed Links role reward at **level 25**, role **1515691359862915162**.
 
-## Installation
+## Setup
 
-```bash
-npm install
+Requires Node.js 22.13 or later and the Server Members and Message Content intents.
+
+```sh
+npm ci
 cp .env.example .env
-npm run build
-npm run deploy
-npm run dev
+npm test
+npm start
 ```
 
-## Docker Deployment
+Fill in bot credentials and server/role/channel IDs in `.env`. Open Ticket configuration is generated from its retained templates on startup; the bot token stays in the environment. Slash commands are registered by the Open Ticket engine during startup. `npm run deploy` only validates configuration; it does not register the old standalone command set.
 
-Build and start the production container:
+Post member-facing panels as an administrator:
 
-```bash
-docker compose up -d --build
+- `/panel id:support` — support/report/appeal tickets.
+- `/verify-panel channel:...` — Minecraft verification.
+- `/levels panel channel:...` — rank and leaderboard buttons.
+
+Administrator controls include `/automod`, `/levels configure`, `/levels set`, `/cases`, `/applications`, `/event`, `/participants`, and Open Ticket's own management commands. `/ticketstaff` remains for existing legacy tickets and application-channel helpers.
+
+## Leveling
+
+Eligible messages earn 20 XP, at most once a minute. Repeated content, bots, webhooks, system messages, threads, support tickets, application tickets, and AutoMod-blocked messages earn no XP. Level thresholds follow `50 * level^2 + 100 * level`.
+
+At level 25, the bot awards role `1515691359862915162`. It adds Embed Links to that role's existing permissions. The bot needs Manage Roles and a position above the reward role. Channel overrides can still prevent embeds. No voice XP or imported Arcane XP is included. The first startup verifies the reward role; assignment failures are logged.
+
+## Data and deployment
+
+All durable state is under `data`: SQLite via `DATABASE_PATH`, Open Ticket JSON state in `data/openticket`, and transcript archives in `data/transcripts`. Back up this directory. To keep the existing bot's records, use `DATABASE_PATH=data/giize.db` with a backed-up copy of that database.
+
+```sh
+docker compose build
+docker compose up -d
 ```
 
-Follow logs:
+Stop the previous bot before starting the replacement with the same token. This is one Discord connection, shared by the Open Ticket engine and the Glurps plugin.
 
-```bash
-docker compose logs -f
-```
+The old dashboard service is absent from this Compose project. If it also serves a public website, preserve that website separately before removing its old service.
 
-Stop the bot:
+## Verification status
 
-```bash
-docker compose down
-```
+Local TypeScript builds and automated workflow checks cover application decisions, optional answers, participant synchronization, event-end cleanup, AutoMod activation/filters, XP cooldowns, role permission configuration, case edits, and native/custom command isolation. Docker and live Discord checks still need the deployment host. Passing these checks is not a claim of a completed live Discord test.
 
-The SQLite database is stored in `./data` on the host and mounted to `/app/data` in the container.
+## Source
 
-The dashboard/web service runs as `giize-dashboard` and talks to the bot over the private Compose network at `http://giize-bot:3001`. The bot API is not published directly to the host.
-
-The same Next.js service serves:
-
-- `https://glurps.net` as the public landing page.
-- `https://dashboard.glurps.net` as the authenticated dashboard.
-
-Dashboard commands:
-
-```bash
-npm run dashboard:dev
-npm run dashboard:build
-npm run dashboard:start
-```
-
-For local OAuth development, use:
-
-```text
-http://localhost:3000/api/auth/callback/discord
-```
-
-### Nginx Glurps.net Example
-
-Create a separate Nginx site for Glurps.net and the dashboard subdomain. Do not overwrite existing Cockpit or VPS configuration. A ready-to-copy example lives at `nginx/glurps.example.conf`.
-
-```nginx
-server {
-    listen 80;
-    server_name www.glurps.net;
-    return 301 https://glurps.net$request_uri;
-}
-
-server {
-    listen 80;
-    server_name glurps.net dashboard.glurps.net;
-    return 301 https://$host$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name glurps.net;
-
-    ssl_certificate /etc/letsencrypt/live/glurps.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/glurps.net/privkey.pem;
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-Proto https;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-```
-
-DNS note: the current notes say `glurps.net` and wildcard subdomains point to `162.213.198.42`, while the current Glurps VPS public IPv4 is `85.190.101.48`. Point the website DNS to the VPS that actually hosts the dashboard before enabling HTTPS/Nginx. Do not change the Minecraft SRV record unless you intentionally move the Minecraft service.
-
-## Required Intents
-
-Enable these in the Discord Developer Portal and keep them in the bot client:
-
-- Server Members Intent
-- Message Content Intent
-- Guilds
-- Guild Messages
-- Guild Moderation
-- Guild Voice States
-- Guild Invites
-
-## Required Permissions
-
-Recommended bot permissions:
-
-- View Channels
-- Send Messages
-- Manage Channels
-- Manage Roles
-- Manage Nicknames
-- Read Message History
-- Attach Files
-- Embed Links
-- Use Slash Commands
-- View Audit Log
-- Ban Members
-- Moderate Members
-- Manage Messages
-
-The bot role must be above roles it assigns and above members whose nicknames it changes.
-
-## Environment Variables
-
-Required:
-
-- `DISCORD_TOKEN`
-- `CLIENT_ID`
-- `GUILD_ID`
-
-Production configuration:
-
-- `STAFF_ROLE_ID`
-- `VERIFY_ROLE_ID`
-- `JAVA_VERIFIED_ROLE_ID`
-- `BEDROCK_VERIFIED_ROLE_ID`
-- `TICKET_CATEGORY_ID`
-- `TICKET_LOGS_CHANNEL_ID`
-- `DIAMOND_SUPPORTER_ROLE_ID`
-- `IRON_SUPPORTER_ROLE_ID`
-- `DIRT_SUPPORTER_ROLE_ID`
-- `EVENT_LOGS_CHANNEL_ID`
-- `VERIFICATION_LOG_CHANNEL_ID`
-- `AUDIT_LOGS_CHANNEL_ID`
-- `WELCOME_CHANNEL_ID`
-- `WELCOME_BANNER_URL`
-- `WELCOME_ROLE_ID`
-- `RULES_CHANNEL_ID`
-- `ANNOUNCEMENTS_CHANNEL_ID`
-- `SERVER_IP`
-- `SERVER_PORT`
-- `DISCORD_CLIENT_ID`
-- `DISCORD_CLIENT_SECRET`
-- `DISCORD_REDIRECT_URI`
-- `DASHBOARD_SESSION_SECRET`
-- `DASHBOARD_INTERNAL_SECRET`
-- `DASHBOARD_GUILD_ID`
-- `NEXT_PUBLIC_SITE_URL`
-- `NEXT_PUBLIC_DASHBOARD_URL`
-- `NEXT_PUBLIC_DISCORD_INVITE_URL`
-- `NEXT_PUBLIC_MINECRAFT_ADDRESS`
-- `DASHBOARD_HOST_PORT`
-- `DASHBOARD_API_PORT`
-
-Legacy aliases still supported:
-
-- `VERIFIED_ROLE_ID`
-- `MC_HOST`
-- `MC_PORT`
-
-## Commands
-
-General:
-
-- `/help`
-- `/ping`
-
-Minecraft:
-
-- `/server`
-- `/status`
-
-Events:
-
-- `/event create`
-- `/event edit`
-- `/event delete`
-- `/event end`
-- `/events list`
-- `/participants`
-
-Tickets:
-
-- `/ticket open`
-- `/ticketstaff close`
-- `/ticketstaff add`
-- `/ticketstaff remove`
-- `/ticketstaff rename`
-
-Verification:
-
-- `/verify`
-- `/unverify`
-
-Admin:
-
-- `/moderation`
-- `/channel`
-- `/purge`
-- `/ticketpanel send`
-
-Dashboard:
-
-- Overview
-- Welcome
-- Verification
-- Tickets
-- Events
-- AutoMod
-- Logging
-- Members
-- Roles
-- Nicknames
-- Warnings
-- Timeouts
-- Channels
-- Announcements
-- Settings
-- Bot Health
-
-## Screenshots
-
-Screenshots will be added here:
-
-- Event panel
-- Ticket transcript log
-- Welcome preview
-- Verification confirmation
+See `THIRD_PARTY.md` and `vendor/open-ticket/UPSTREAM.md` for upstream versions and custom changes. This distribution is GPL-3.0-only, with dependencies retaining their own licenses.

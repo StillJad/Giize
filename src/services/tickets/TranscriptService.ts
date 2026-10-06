@@ -3,6 +3,7 @@ import {
   type Message,
   type TextBasedChannel,
 } from "discord.js";
+import { createTranscript, ExportReturnType } from "discord-html-transcripts";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { TicketPriority, TicketType } from "./TicketRenderer.js";
@@ -45,6 +46,16 @@ export class TranscriptService {
       filePath,
       filename,
     };
+  }
+
+  async createHtmlFile(channel: TextBasedChannel, ticketNumber: string) {
+    const directory = path.join(process.cwd(), "data", "transcripts", `${Date.now()}-ticket-${ticketNumber.replace("#", "")}`);
+    const filename = `ticket-${ticketNumber.replace("#", "")}.html`;
+    const filePath = path.join(directory, filename);
+    const html = await createTranscript(channel as unknown as Parameters<typeof createTranscript>[0], { returnType: ExportReturnType.String, saveImages: false, poweredBy: true, hydrate: false });
+    await mkdir(directory, { recursive: true });
+    await writeFile(filePath, html, "utf8");
+    return { directory, filePath, filename };
   }
 
   createAttachment(filePath: string, filename: string) {

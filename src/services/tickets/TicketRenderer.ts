@@ -1,5 +1,5 @@
 import type { User } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 export type TicketType = "Support" | "Report" | "Player Report" | "Appeal" | "Help" | "Builder" | "Media";
 export type TicketPriority = "Diamond" | "Iron" | "Dirt" | "Normal";
@@ -30,7 +30,7 @@ export type TicketCloseLog = {
 
 export class TicketRenderer {
   renderWelcomeEmbed(ticket: TicketWelcome) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Ticket Opened")
       .addFields(
         { name: "Ticket", value: ticket.ticketNumber, inline: true },
@@ -47,7 +47,7 @@ export class TicketRenderer {
   }
 
   renderLogEmbed(ticket: TicketCloseLog) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Ticket Closed")
       .addFields(
         { name: "Ticket #", value: ticket.ticketNumber, inline: true },
@@ -75,7 +75,7 @@ export class TicketRenderer {
   }
 
   renderClosedDmEmbed(ticket: TicketCloseLog) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Ticket Closed")
       .setDescription("Your support ticket has been closed.")
       .addFields(

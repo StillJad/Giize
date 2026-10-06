@@ -3,7 +3,7 @@ import { Colors } from "../config/colors.js";
 
 export const giizeFooter = "Glurps Bot";
 
-export function giizeEmbed() {
+export function glurpsEmbed() {
   return new EmbedBuilder()
     .setColor(Colors.giize)
     .setFooter({ text: giizeFooter })

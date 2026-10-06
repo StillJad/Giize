@@ -1,28 +1,34 @@
 {
-  "name": "giize-events-bot",
-  "version": "1.0.0",
-  "description": "",
+  "name": "glurps-bot",
+  "version": "2.0.0",
+  "description": "Administrator-only Discord bot for Glurps Events",
   "main": "dist/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon --watch src --ext ts --exec tsx src/index.ts",
-    "deploy": "tsx src/deploy.ts",
-    "build": "rm -rf dist && tsc",
-    "start": "node dist/index.js",
-    "dashboard:dev": "npm --prefix apps/dashboard run dev",
-    "dashboard:build": "npm --prefix apps/dashboard run build",
-    "dashboard:start": "npm --prefix apps/dashboard run start"
+    "test": "npm run build && node scripts/verification-schema-smoke.mjs && node scripts/command-regression-smoke.mjs && node scripts/event-application-settings-smoke.mjs && node scripts/replacement-smoke.mjs && node scripts/application-workflow-smoke.mjs && node scripts/automod-smoke.mjs && node scripts/start-open-ticket.mjs --check && node scripts/community-integration-smoke.mjs",
+    "dev": "npm run build && npm start",
+    "deploy": "node scripts/start-open-ticket.mjs --check",
+    "build": "rm -rf dist && tsc && tsc -p vendor/open-ticket/tsconfig.json",
+    "start": "node scripts/start-open-ticket.mjs",
+    "check": "npm test",
+    "commands:preview": "tsx src/deploy.ts --dry-run"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "GPL-3.0-only",
   "type": "module",
   "dependencies": {
+    "@open-discord-bots/framework": "^2.0.7",
+    "@types/terminal-kit": "^2.5.7",
+    "ansis": "^4.4.0",
     "better-sqlite3": "^12.11.1",
+    "discord-html-transcripts": "^3.2.0",
     "discord.js": "^14.26.4",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
-    "fast-glob": "^3.3.3"
+    "fast-glob": "^3.3.3",
+    "formatted-json-stringify": "^1.3.2",
+    "jsonc-parser": "^3.3.1",
+    "terminal-kit": "^3.1.4"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
@@ -35,5 +41,9 @@
     "prettier": "^3.9.1",
     "tsx": "^4.22.4",
     "typescript": "^6.0.3"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

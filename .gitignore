@@ -1,4 +1,11 @@
-node_modules
-dist
+node_modules/
+dist/
 .env
-data/*.db
+.env.*
+!.env.example
+data/*
+!data/.gitkeep
+.next/
+*.tsbuildinfo
+*.log
+.DS_Store

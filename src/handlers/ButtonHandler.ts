@@ -1,13 +1,15 @@
-import { Events, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
+import { Events, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
+import { levelService } from "../services/community/LevelService.js";
 import { client } from "../client.js";
 import { eventApplicationRouter } from "../services/events/EventApplicationRouter.js";
 import { eventRouter } from "../services/events/EventRouter.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
+import { ticketService } from "../services/tickets/TicketService.js";
 import { ticketRouter } from "../services/tickets/TicketRouter.js";
 import { VerificationService, verificationService } from "../services/verification/VerificationService.js";
 import { purgeService } from "../services/purge/PurgeService.js";
 import { moderationService } from "../services/moderation/ModerationService.js";
-import { giizeEmbed } from "../utils/embeds.js";
+import { glurpsEmbed } from "../utils/embeds.js";
 import { logger } from "../utils/logger.js";
 
 async function safeUpdate(
@@ -44,6 +46,12 @@ function decodeVerificationUsername(value: string) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
+    if (interaction.customId === "account_verify") {
+      await interaction.showModal(new ModalBuilder().setCustomId("account_verify_submit").setTitle("Minecraft Verification").addComponents(
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("username").setLabel("Minecraft username / Bedrock gamertag").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32)),
+        new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("platform").setLabel("Edition: Java or Bedrock").setStyle(TextInputStyle.Short).setValue("Java").setRequired(true).setMaxLength(7)))); return;
+    }
+    if (interaction.customId.startsWith("levels_")) { await levelService.button(interaction); return; }
 
     if (interaction.customId.startsWith("purge_confirm:")) {
       const [, purgeId, stage] = interaction.customId.split(":");
@@ -83,6 +91,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    if (interaction.customId === "ticket_claim" || interaction.customId === "ticket_unclaim" || interaction.customId.startsWith("ticket_confirm:") || interaction.customId.startsWith("ticket_cancel:")) {
+      await ticketService.handleManagementButton(interaction);return;
+    }
     if (interaction.customId === "ticket_close") {
       if (!canManageTickets(interaction)) {
         await safeReply(interaction, { content: "Only ticket staff can close tickets.", flags: 64 });
@@ -107,7 +118,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await safeUpdate(interaction, {
         content: "",
         embeds: [
-          giizeEmbed()
+          glurpsEmbed()
             .setTitle("Verification Cancelled")
             .setDescription("Your Minecraft account was not linked.")
             .setFooter({ text: "Glurps Events Verification System" }),
@@ -159,7 +170,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       await safeUpdate(interaction, {
         content: "",
         embeds: [
-          giizeEmbed()
+          glurpsEmbed()
             .setTitle("Verification Successful")
             .setDescription("You have successfully linked your Discord account to your Minecraft account.")
             .addFields(

@@ -1,7 +1,7 @@
 import { SlashCommandBuilder } from "discord.js";
 import type { Command } from "../../types/Command.js";
 import { config } from "../../config/config.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 export const command: Command = {
   data: new SlashCommandBuilder()
@@ -14,7 +14,7 @@ export const command: Command = {
       const res = await fetch(`https://api.mcstatus.io/v2/status/java/${config.mcHost}:${config.mcPort}`);
       const data = await res.json();
 
-      const embed = giizeEmbed()
+      const embed = glurpsEmbed()
         .setTitle(data.online ? "🟢 Glurps Events is Online" : "🔴 Glurps Events is Offline")
         .addFields(
           { name: "IP", value: `\`${config.mcHost}\``, inline: true },
@@ -28,7 +28,7 @@ export const command: Command = {
     } catch {
       await interaction.editReply({
         embeds: [
-          giizeEmbed()
+          glurpsEmbed()
             .setTitle("🔴 Status Check Failed")
             .setDescription("Could not reach the status API.")
         ]

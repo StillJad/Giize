@@ -6,11 +6,8 @@ import { logger } from "./utils/logger.js";
 
 const commands = await loadCommands();
 
-const rest = new REST({ version: "10" }).setToken(config.token);
-
-await rest.put(
-  Routes.applicationGuildCommands(config.clientId, config.guildId),
-  { body: commands.map(command => command.data.toJSON()) }
-);
-
-logger.info(`✓ Deployed ${commands.size} slash commands`);
+if (process.argv.includes("--dry-run")) {
+  console.log(JSON.stringify(commands.map(command => command.data.toJSON()), null, 2));
+} else {
+  logger.info("Open Ticket registers the combined command set during npm start. Use --dry-run to inspect legacy/custom command definitions.");
+}

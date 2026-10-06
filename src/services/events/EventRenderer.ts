@@ -4,7 +4,7 @@ import {
   ButtonStyle,
   type APIEmbedField,
 } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import { applicationMethodLabel } from "./EventApplicationSettings.js";
 
 export type EventStatus = "scheduled" | "ended";
@@ -80,7 +80,7 @@ export class EventRenderer {
       }
     );
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle(event.title)
       .setDescription(event.description)
       .addFields(fields)
@@ -140,7 +140,7 @@ export class EventRenderer {
       });
     }
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Participants")
       .setDescription([
         `Event ID: ${event.eventNumber}`,
@@ -181,7 +181,7 @@ export class EventRenderer {
       );
     }
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Event Ended")
       .addFields(fields);
   }
@@ -200,14 +200,14 @@ export class EventRenderer {
       inline: false,
     }));
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("✨ Glurps Events")
       .setDescription(events.length > 0 ? "Upcoming and recent events." : "No events found.")
       .addFields(fields.slice(0, 25));
   }
 
   renderReminderEmbed(event: EventRecord, label: string) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle(`⏰ Event Reminder: ${event.title}`)
       .setDescription(`${label} until this event starts.`)
       .addFields(

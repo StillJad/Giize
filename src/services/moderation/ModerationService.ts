@@ -1,3 +1,4 @@
+import { caseService } from "./CaseService.js";
 import { randomUUID } from "node:crypto";
 import {
   ChannelType,
@@ -405,7 +406,8 @@ export class ModerationService {
   ) {
     if (!interaction.guild) return;
 
-    await auditLogService.send(interaction.guild, action, moderationRenderer.logFields({
+    const caseId = caseService.record(interaction.guild.id,target.id,interaction.user.id,action,reason ?? "No reason provided",duration ?? null);
+    await auditLogService.send(interaction.guild, `Case #${caseId}: ${action}`, moderationRenderer.logFields({
       action,
       target: target.id ? `<@${target.id}> (${target.id})` : "Unknown",
       moderator: `<@${interaction.user.id}> (${interaction.user.id})`,

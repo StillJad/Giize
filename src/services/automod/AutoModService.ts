@@ -1,3 +1,4 @@
+import { caseService } from "../moderation/CaseService.js";
 import {
   GuildMember,
   PermissionFlagsBits,
@@ -13,7 +14,7 @@ import { logger } from "../../utils/logger.js";
 import { autoModRenderer } from "./AutoModRenderer.js";
 import { autoModTracker } from "./AutoModTracker.js";
 
-const developerRoleId = "1518110330377736323";
+
 const oneDay = 86_400_000;
 
 export type MatchType = "exact" | "contains";
@@ -97,10 +98,21 @@ type ConfigureInput = {
 export class AutoModService {
   private readonly configCache = new Map<string, CachedConfig>();
 
+  initializeForGuild(guildId: string) {
+    this.ensureConfig(guildId);
+    sqlite.exec("CREATE TABLE IF NOT EXISTS automod_upgrade_state (guild_id TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)");
+    sqlite.transaction(() => {
+      if (sqlite.prepare("SELECT 1 FROM automod_upgrade_state WHERE guild_id = ?").get(guildId)) return;
+      sqlite.prepare("UPDATE automod_configs SET enabled = 1, updated_at = ? WHERE guild_id = ?").run(Date.now(), guildId);
+      sqlite.prepare("INSERT INTO automod_upgrade_state (guild_id, applied_at) VALUES (?, ?)").run(guildId, Date.now());
+    })();
+    this.invalidate(guildId);
+  }
+
   canManage(member: unknown) {
     return (
       member instanceof GuildMember &&
-      (member.permissions.has(PermissionFlagsBits.Administrator) || member.roles.cache.has(developerRoleId))
+      member.permissions.has(PermissionFlagsBits.Administrator)
     );
   }
 
@@ -296,6 +308,7 @@ export class AutoModService {
     if (!violation) return;
 
     await this.applyViolation(message, config, violation);
+    return true;
   }
 
   private async detectViolation(message: Message, config: AutoModConfig): Promise<Violation | null> {
@@ -366,21 +379,28 @@ export class AutoModService {
   private async applyViolation(message: Message, config: AutoModConfig, violation: Violation) {
     const warningCount = this.createWarning(message.guild!.id, message.author.id, violation.rule, violation.reason);
     const timeoutMinutes = this.timeoutMinutes(config, warningCount, violation.timeoutEligible);
-    let action = "Message deleted; warning recorded";
+    let action = "Warning recorded";
     let timeoutDuration = "None";
 
     autoModTracker.markAutoModDelete(message.id);
-    await message.delete().catch(error => logger.warn("AutoMod failed to delete message.", error));
+    try {
+      await message.delete();
+      action = "Message deleted; warning recorded";
+    } catch (error) {
+      action = "Message deletion failed; warning recorded";
+      logger.warn("AutoMod failed to delete message.", error);
+    }
 
     if (timeoutMinutes > 0 && message.member && await this.applyTimeout(message.member, timeoutMinutes, violation.reason)) {
-      action = "Message deleted; warning recorded; timeout applied";
+      action += "; timeout applied";
       timeoutDuration = `${timeoutMinutes} minutes`;
     }
 
-    await this.notifyUser(message, violation.reason);
+    if (action.startsWith("Message deleted")) await this.notifyUser(message, violation.reason);
+    const caseId = caseService.record(message.guild!.id,message.author.id,message.client.user.id,`AutoMod: ${violation.rule}`,violation.reason,timeoutDuration);
     await this.logAction(message, config, {
       userId: message.author.id,
-      rule: violation.rule,
+      rule: `Case #${caseId}: ${violation.rule}`,
       action,
       channelId: message.channel.id,
       reason: violation.reason,
@@ -456,7 +476,6 @@ export class AutoModService {
   private isExempt(member: GuildMember, message: Message, config: AutoModConfig) {
     if (member.id === member.guild.ownerId) return true;
     if (member.permissions.has(PermissionFlagsBits.Administrator)) return true;
-    if (member.roles.cache.has(developerRoleId)) return true;
     if (config.exemptChannelIds.has(message.channel.id)) return true;
     return member.roles.cache.some(role => config.exemptRoleIds.has(role.id));
   }
@@ -594,7 +613,6 @@ export class AutoModService {
   private async applyTimeout(member: GuildMember, minutes: number, reason: string) {
     if (member.id === member.guild.ownerId) return false;
     if (member.permissions.has(PermissionFlagsBits.Administrator)) return false;
-    if (member.roles.cache.has(developerRoleId)) return false;
     if (member.id === member.client.user.id) return false;
 
     const botMember = member.guild.members.me ?? (await member.guild.members.fetchMe().catch(() => null));

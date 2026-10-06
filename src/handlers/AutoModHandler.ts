@@ -1,4 +1,5 @@
 import { Events } from "discord.js";
+import { levelService } from "../services/community/LevelService.js";
 import { client } from "../client.js";
 import { autoModService } from "../services/automod/AutoModService.js";
 import { autoModTracker } from "../services/automod/AutoModTracker.js";
@@ -6,7 +7,8 @@ import { logger } from "../utils/logger.js";
 
 client.on(Events.MessageCreate, async message => {
   try {
-    await autoModService.handleMessage(message);
+    const blocked = await autoModService.handleMessage(message);
+    if (!blocked) await levelService.handleMessage(message);
   } catch (error) {
     logger.error("AutoMod message handler failed.", error, { type: "event", name: Events.MessageCreate });
   }
