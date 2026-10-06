@@ -24,3 +24,5 @@ otdebug.txt
 !.tools/mergeTranslations.ts
 !.tools/docker-compose.yml
 !.tools/build-docker.sh
+!plugins/glurps/
+!plugins/glurps/**
