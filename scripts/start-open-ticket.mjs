@@ -32,6 +32,8 @@ export function configureEngine(env=process.env) {
  const panel=read('panels.jsonc')[0];panel.id='support';panel.name='Event Support';panel.options=options.map(o=>o.id);panel.embed.title='Event Support';panel.embed.description='Choose Support, Player Report, or Appeal to open a private ticket.';panel.embed.fields=[];panel.embed.footer='';panel.settings.enableMaxTicketsWarningInText=false;panel.settings.enableMaxTicketsWarningInEmbed=false;panel.settings.describeOptionsInText=false;panel.settings.describeOptionsInEmbedFields=false;panel.settings.describeOptionsInEmbedDescription=false;panel.embed.customColor='#5865F2';
  const question=read('questions.jsonc').find(q=>q.type==='paragraph');question.id='issue';question.name='How can we help?';question.required=true;question.placeholder='Describe your issue or include evidence.';
  const transcripts=read('transcripts.jsonc');transcripts.general.enabled=true;transcripts.general.enableCreatorDM=true;transcripts.general.enableChannel=Boolean(env.TICKET_LOGS_CHANNEL_ID);transcripts.general.channel=env.TICKET_LOGS_CHANNEL_ID??'';transcripts.general.mode='text';transcripts.embedSettings.customColor='#5865F2';
+ const custom=resolve(root,'data/panel-customization.json');
+ if(existsSync(custom)) Object.assign(panel.embed,JSON.parse(readFileSync(custom,'utf8')));
  return {general,options,panel,question,transcripts};
 }
 if(process.argv.includes('--check')) {

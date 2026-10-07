@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 import { installAdministratorDispatcher, calculateAdministratorAccess } from './policy.js';
 const glurpsRoot=process.env.GLURPS_ROOT!;
 let glurpsCommands:any;
+(globalThis as any).__eventEngine=opendiscord;
 opendiscord.permissions.setCalculation(calculateAdministratorAccess as api.ODPermissionCalculationCallback);
 opendiscord.events.get('onClientReady').listen(async manager=>{
   (globalThis as any).__glurpsClient=manager.client;

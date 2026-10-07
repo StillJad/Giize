@@ -29,7 +29,7 @@ export type EventApplicationRecord = {
 export class EventApplicationRenderer {
   renderTicketEmbed(event: EventRecord, application: EventApplicationRecord, mode: "automatic" | "manual" = "manual") {
     const minecraftAccount = application.platform === "Unverified"
-      ? `${application.minecraftUsername} (not verified)`
+      ? `${application.minecraftUsername}`
       : application.minecraftUsername;
     const embed = glurpsEmbed()
       .setTitle("Event Application")
@@ -38,7 +38,6 @@ export class EventApplicationRenderer {
         { name: "Event Name", value: event.title, inline: true },
         { name: "Applicant", value: `<@${application.discordId}>`, inline: true },
         { name: "Minecraft Account", value: minecraftAccount, inline: true },
-        { name: "Platform", value: application.platform, inline: true },
         { name: "Priority", value: application.priority, inline: true },
         { name: "Status", value: this.statusLabel(application.status, mode), inline: false },
         { name: "Why should you play the event?", value: this.truncate(application.answerOne || "Not provided"), inline: false },
@@ -75,7 +74,7 @@ export class EventApplicationRenderer {
 
   renderLogEmbed(event: EventRecord, application: EventApplicationRecord, action: string, reviewerId: string | null, automatic: boolean) {
     const minecraftAccount = application.platform === "Unverified"
-      ? `${application.minecraftUsername} (not verified)`
+      ? `${application.minecraftUsername}`
       : application.minecraftUsername;
     return glurpsEmbed()
       .setTitle("Event Application")
@@ -85,7 +84,6 @@ export class EventApplicationRenderer {
         { name: "Event Name", value: event.title, inline: true },
         { name: "Applicant", value: `<@${application.discordId}>`, inline: true },
         { name: "Minecraft Account", value: minecraftAccount, inline: true },
-        { name: "Platform", value: application.platform, inline: true },
         { name: "Priority", value: application.priority, inline: true },
         { name: "Status", value: this.statusLabel(application.status, automatic ? "automatic" : "manual"), inline: true },
         { name: "Reviewed By", value: reviewerId ? `<@${reviewerId}>` : "Not reviewed", inline: true },
