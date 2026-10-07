@@ -35,3 +35,7 @@ opendiscord.events.get('afterSlashCommandsRegistered').listen(async manager=>{
   const registered=await opendiscord.client.client.application!.commands.fetch();
   for(const command of registered.values()) if(command.type===ApplicationCommandType.ChatInput && !allowed.has(command.name)) await command.delete();
 });
+
+import {ticketRecord,recordClosure} from './ticket-summary.js';
+opendiscord.events.get('afterTicketCreated').listen(async (_ticket,_creator,channel)=>{await ticketRecord(channel.id);});
+opendiscord.events.get('afterTicketClosed').listen(async (_ticket,closer,channel,reason)=>{await recordClosure(channel.id,closer.id,reason);});

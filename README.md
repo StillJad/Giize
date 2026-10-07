@@ -64,3 +64,5 @@ Local TypeScript builds and automated workflow checks cover application decision
 See `THIRD_PARTY.md` and `vendor/open-ticket/UPSTREAM.md` for upstream versions and custom changes. This distribution is GPL-3.0-only, with dependencies retaining their own licenses.
 
 Update: normal messages up to 40 words earn 20 XP; messages under 3 seconds apart or repeats trigger a 30-second XP penalty. Images add 10 XP and replies add 5 XP. Receiving a new reaction adds 5 XP at most once per 30 seconds; self-reactions and repeat reactions do not count. Use `/level [user]`, `/leaderboard`, and `/panel-edit channel message [title] [description]`. Milestone roles start at 1 then every five levels through 100. Only the highest milestone role is retained; the level-25 Embed Links reward is separate. Event applications do not require verification.
+
+Ticket transcripts are delivered as readable UTF-8 `.txt` attachments directly in Discord. No browser viewer or hosting is used. DM summaries show Ticket Closed, ticket number, closer, reason and duration; transcript logs include full opening and closure details. Images are represented by their filenames and attachment links.

@@ -1,4 +1,4 @@
-import { createTranscript, ExportReturnType } from "discord-html-transcripts";
+import {closureEmbed} from "../../../plugins/glurps/ticket-summary.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {opendiscord, api, utilities} from "../../index.js"
@@ -166,20 +166,15 @@ export async function loadAllTranscriptCompilers(){
         final.push(...finalStats)
         final.push(finalMessages.join("\n\n"))
 
-        const html = await createTranscript(channel as unknown as Parameters<typeof createTranscript>[0], { returnType: ExportReturnType.String, saveImages: false, hydrate: false, poweredBy: true });
+        const contents=final.join("\n");
         const archive = resolve(process.env.GLURPS_ROOT ?? process.cwd(), "data/transcripts");
         await mkdir(archive, {recursive:true});
-        await writeFile(resolve(archive, `${channel.id}-${Date.now()}.html`), html, "utf8");
-        return {ticket,channel,user,success:true,errorReason:null,messages,data:{contents:html}}
+        await writeFile(resolve(archive, `${channel.id}-${Date.now()}.txt`), contents, "utf8");
+        return {ticket,channel,user,success:true,errorReason:null,messages,data:{contents}}
     },async (result) => {
-        //READY
-        return {
-            channelMessage:await messages.getSafe("opendiscord:transcript-text-ready").build("channel",{guild:result.channel.guild,channel:result.channel,user:result.user,ticket:result.ticket,result,compiler:opendiscord.transcripts.get("opendiscord:text-compiler")}),
-            creatorDmMessage:await messages.getSafe("opendiscord:transcript-text-ready").build("creator-dm",{guild:result.channel.guild,channel:result.channel,user:result.user,ticket:result.ticket,result,compiler:opendiscord.transcripts.get("opendiscord:text-compiler")}),
-            participantDmMessage:await messages.getSafe("opendiscord:transcript-text-ready").build("participant-dm",{guild:result.channel.guild,channel:result.channel,user:result.user,ticket:result.ticket,result,compiler:opendiscord.transcripts.get("opendiscord:text-compiler")}),
-            activeAdminDmMessage:await messages.getSafe("opendiscord:transcript-text-ready").build("active-admin-dm",{guild:result.channel.guild,channel:result.channel,user:result.user,ticket:result.ticket,result,compiler:opendiscord.transcripts.get("opendiscord:text-compiler")}),
-            everyAdminDmMessage:await messages.getSafe("opendiscord:transcript-text-ready").build("every-admin-dm",{guild:result.channel.guild,channel:result.channel,user:result.user,ticket:result.ticket,result,compiler:opendiscord.transcripts.get("opendiscord:text-compiler")})
-        }
+        const attachment={attachment:Buffer.from(result.data!.contents,"utf8"),name:"transcript.txt"};
+        const build=async (full:boolean)=>({id:new api.ODId("opendiscord:ticket-closed-summary"),ephemeral:false,message:{embeds:[await closureEmbed(result.ticket,result.channel,result.user,full)],files:[attachment],allowedMentions:{parse:[] as []}}});
+        return {channelMessage:await build(true),creatorDmMessage:await build(false),participantDmMessage:undefined,activeAdminDmMessage:undefined,everyAdminDmMessage:undefined};
     }))
 
     //HTML COMPILER

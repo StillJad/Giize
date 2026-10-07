@@ -26,12 +26,12 @@ const transcriptFiles = () => {
             const creatorId = ticket.get("opendiscord:opened-by").value ?? "unknown-creator-id"
             const creator = (await opendiscord.tickets.getTicketUser(ticket,"creator"))
 
-            if (fileMode == "custom") instance.setName(customName.split(".")[0]+".html")
-            else if (fileMode == "user-id") instance.setName(creatorId+".html")
-            else if (fileMode == "user-name")  instance.setName((creator ? creator.username : "unknown-creator-name")+".html")
-            else if (fileMode == "channel-id")  instance.setName(channel.id+".html")
-            else if (fileMode == "channel-name")  instance.setName(channel.name+".html")
-            else instance.setName("transcript.html")
+            if (fileMode == "custom") instance.setName(customName.split(".")[0]+".txt")
+            else if (fileMode == "user-id") instance.setName(creatorId+".txt")
+            else if (fileMode == "user-name")  instance.setName((creator ? creator.username : "unknown-creator-name")+".txt")
+            else if (fileMode == "channel-id")  instance.setName(channel.id+".txt")
+            else if (fileMode == "channel-name")  instance.setName(channel.name+".txt")
+            else instance.setName("transcript.txt")
 
             instance.setDescription(lang.getTranslation("transcripts.success.textFileDescription"))
             

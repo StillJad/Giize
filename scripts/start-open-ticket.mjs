@@ -14,7 +14,7 @@ export function configureEngine(env=process.env) {
  general.status={...general.status,text:'Event Bot'};
  for(const key of Object.keys(general.permissions)) general.permissions[key]='admin';
  general.permissions.help='none';general.permissions.claim='none';general.permissions.unclaim='none';
- general.logs.enabled=Boolean(env.TICKET_LOGS_CHANNEL_ID);general.logs.channel=env.TICKET_LOGS_CHANNEL_ID??'';
+ general.logs.logMessages.deleting={dm:false,logs:false};general.logs.enabled=Boolean(env.TICKET_LOGS_CHANNEL_ID);general.logs.channel=env.TICKET_LOGS_CHANNEL_ID??'';
  general.ticketSystem.pinFirstTicketMessage=false;general.ticketSystem.enableTicketClaimButtons=false;general.ticketSystem.enableTicketPinButtons=false;general.ticketSystem.closeEmoji="🔒";general.ticketSystem.enableDeleteWithoutTranscript=false;general.ticketSystem.claimedCategories=[];
  general.ticketSystem.closedCategory.enabled=false;general.ticketSystem.backupCategory.enabled=false;
  general.ticketSystem.limits.userMaximum=1;general.ticketSystem.askPriorityOnTicketCreation=false;
@@ -31,7 +31,7 @@ export function configureEngine(env=process.env) {
  });
  const panel=read('panels.jsonc')[0];panel.id='support';panel.name='Event Support';panel.options=options.map(o=>o.id);panel.embed.title='Event Support';panel.embed.description='Choose Support, Player Report, or Appeal to open a private ticket.';panel.embed.fields=[];panel.embed.footer='';panel.settings.enableMaxTicketsWarningInText=false;panel.settings.enableMaxTicketsWarningInEmbed=false;panel.settings.describeOptionsInText=false;panel.settings.describeOptionsInEmbedFields=false;panel.settings.describeOptionsInEmbedDescription=false;panel.embed.customColor='#5865F2';
  const question=read('questions.jsonc').find(q=>q.type==='paragraph');question.id='issue';question.name='How can we help?';question.required=true;question.placeholder='Describe your issue or include evidence.';
- const transcripts=read('transcripts.jsonc');transcripts.general.enabled=true;transcripts.general.enableCreatorDM=true;transcripts.general.enableChannel=Boolean(env.TICKET_LOGS_CHANNEL_ID);transcripts.general.channel=env.TICKET_LOGS_CHANNEL_ID??'';transcripts.general.mode='text';transcripts.embedSettings.customColor='#5865F2';
+ const transcripts=read('transcripts.jsonc');transcripts.general.enabled=true;transcripts.general.enableCreatorDM=true;transcripts.general.enableChannel=Boolean(env.TICKET_LOGS_CHANNEL_ID);transcripts.general.channel=env.TICKET_LOGS_CHANNEL_ID??'';transcripts.general.mode='text';transcripts.textTranscriptStyle.layout='detailed';transcripts.textTranscriptStyle.includeFiles=true;transcripts.textTranscriptStyle.includeEmbeds=true;transcripts.embedSettings.customColor='#5865F2';
  const custom=resolve(root,'data/panel-customization.json');
  if(existsSync(custom)) Object.assign(panel.embed,JSON.parse(readFileSync(custom,'utf8')));
  return {general,options,panel,question,transcripts};
