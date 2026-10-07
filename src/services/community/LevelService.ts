@@ -71,15 +71,15 @@ export class LevelService {
     if(message.channel.isThread()) return;
     if('name' in message.channel && /^(ticket-|event-app-)/.test(message.channel.name ?? "")) return;
     const before=levelForXp(this.get(message.guild.id,message.author.id).xp);
-    const image=message.attachments.some(a=>a.contentType?.startsWith('image/'));
+    const image=message.attachments.some(a=>a.contentType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|avif|bmp)(?:$|\?)/i.test(a.name??a.url));
     if(!this.award(message.guild.id,message.author.id,message.content || (image?`image ${message.id}`:''),Date.now(),(image?10:0)+(message.reference?.messageId?5:0))) return;
     await this.afterAward(message,before);
   }
-  private async afterAward(message:Message,before:number) {
-    const level=levelForXp(this.get(message.guild!.id,message.author.id).xp);
+  private async afterAward(message:Message,before:number,userId=message.author.id) {
+    const level=levelForXp(this.get(message.guild!.id,userId).xp);
     if(level<=before) return;
-    await this.syncReward(message.guild!,message.author.id).catch(error=>logger.warn('Level role assignment failed.',error));
-    if('send' in message.channel) await message.channel.send({content:`<@${message.author.id}> has reached level **${level}**. GG!`,allowedMentions:{users:[message.author.id]}});
+    await this.syncReward(message.guild!,userId).catch(error=>logger.warn('Level role assignment failed.',error));
+    if('send' in message.channel) await message.channel.send({content:`<@${userId}> has reached level **${level}**. GG!`,allowedMentions:{users:[userId]}});
   }
   async handleReaction(reaction:MessageReaction,user:User) {
     if(user.bot) return;
@@ -91,12 +91,15 @@ export class LevelService {
     if(this.reactions.has(key)) return;
     this.reactions.add(key);
     if(this.reactions.size>10000) this.reactions.delete(this.reactions.values().next().value!);
-    const recent=this.get(message.guild.id,message.author.id);
-    if(Date.now()-recent.last_award<30000) return;
-    const before=levelForXp(recent.xp);
-    sqlite.prepare(`INSERT INTO member_xp(guild_id,user_id,xp,last_award) VALUES (?,?,5,?) ON CONFLICT(guild_id,user_id) DO UPDATE SET xp=xp+5,last_award=excluded.last_award`).run(message.guild.id,message.author.id,Date.now());
-    await this.afterAward(message,before);
+    for(const userId of [message.author.id,user.id]) {
+      const recent=this.get(message.guild.id,userId);
+      if(Date.now()-recent.last_award<30000) continue;
+      const before=levelForXp(recent.xp);
+      sqlite.prepare(`INSERT INTO member_xp(guild_id,user_id,xp,last_award) VALUES (?,?,5,?) ON CONFLICT(guild_id,user_id) DO UPDATE SET xp=xp+5,last_award=excluded.last_award`).run(message.guild.id,userId,Date.now());
+      await this.afterAward(message,before,userId);
+    }
   }
+
   rank(guildId:string,userId:string) {
     const {xp}=this.get(guildId,userId); const level=levelForXp(xp);
     return glurpsEmbed().setTitle('Your Rank').setDescription(`<@${userId}>`).addFields({name:'Level',value:String(level),inline:true},{name:'XP',value:String(xp),inline:true},{name:'Next level',value:`${xpForLevel(level+1)-xp} XP to go`,inline:true},{name:'Embed role',value:`Unlocks at level ${this.settings(guildId).reward_level}`});

@@ -4,11 +4,11 @@ A Discord-only bot built on **Open Ticket v4.2.2**, with Event event application
 
 ## Features
 
-- Open Ticket support/report/appeal panels: claiming, releasing, reopening, moving, pinning, priorities, participants, limits, cooldowns, statistics, inactivity closing, and transcripts.
-- Local HTML transcripts using discord-html-transcripts. Copies are saved in `data/transcripts`; the upstream external transcript service is not used.
+- Open Ticket support/report/appeal panels: reopening, moving, pinning, priorities, participants, limits, cooldowns, statistics, inactivity closing, and transcripts.
+- Readable text transcripts stored once in a private Discord storage channel; SQLite retains message references.
 - Event application tickets with optional questions and Accept/Deny/Set Pending/Edit Username buttons. Decisions remain editable until the event ends and synchronize participants and Going roles.
 - Event ending deletes only its application tickets. Application records and audit history remain.
-- Administrator-only slash commands with runtime enforcement, including the Open Ticket commands. Members interact through public panels.
+- Public member commands: `/level`, `/leaderboard`, `/help`, `/ping`, `/server`, `/status`, and `/participants`. Management commands require Administrator at registration and runtime.
 - Public Minecraft verification panel, Java/Bedrock account linking, nicknames, and platform roles.
 - AutoMod for spam, repeats, mentions, emojis, invites, blocked words, and optional domain filtering; all configured through `/automod`.
 - Numbered moderation cases, member history, reason corrections with edit history, bans, kicks, timeouts, warnings, channel controls, and purge.
@@ -44,7 +44,7 @@ At level 25, the bot awards role `1515691359862915162`. It adds Embed Links to t
 
 ## Data and deployment
 
-All durable state is under `data`: SQLite via `DATABASE_PATH`, Open Ticket JSON state in `data/openticket`, and transcript archives in `data/transcripts`. Back up this directory. To keep the existing bot's records, use `DATABASE_PATH=data/giize.db` with a backed-up copy of that database.
+All durable state is under `data`: SQLite via `DATABASE_PATH`, Open Ticket JSON state in `data/openticket`; transcript files are stored in Discord. Back up this directory. To keep the existing bot's records, use `DATABASE_PATH=data/giize.db` with a backed-up copy of that database.
 
 ```sh
 docker compose build
@@ -65,4 +65,4 @@ See `THIRD_PARTY.md` and `vendor/open-ticket/UPSTREAM.md` for upstream versions 
 
 Update: normal messages up to 40 words earn 20 XP; messages under 3 seconds apart or repeats trigger a 30-second XP penalty. Images add 10 XP and replies add 5 XP. Receiving a new reaction adds 5 XP at most once per 30 seconds; self-reactions and repeat reactions do not count. Use `/level [user]`, `/leaderboard`, and `/panel-edit channel message [title] [description]`. Milestone roles start at 1 then every five levels through 100. Only the highest milestone role is retained; the level-25 Embed Links reward is separate. Event applications do not require verification.
 
-Ticket transcripts are delivered as readable UTF-8 `.txt` attachments directly in Discord. No browser viewer or hosting is used. DM summaries show Ticket Closed, ticket number, closer, reason and duration; transcript logs include full opening and closure details. Images are represented by their filenames and attachment links.
+Compact Ticket Closed summaries include a View Transcript button that sends the stored UTF-8 `.txt` file to your DMs. Administrator log summaries also include Edit Reason, which updates both the log and opener DM. No browser viewer or hosting is used. Images are represented by filenames and attachment links. Event creation defaults to the current channel when no channel is selected.

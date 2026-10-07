@@ -141,12 +141,12 @@ export async function registerActions(){
                 const historyData: api.ODTranscriptHistoryData = {
                     ticketId:result.channel.id,
                     ticketName:"#"+result.channel.name,
-                    ticketCreatorId:result.user.id,
+                    ticketCreatorId:result.ticket.get("opendiscord:opened-by").value ?? result.user.id,
                     ticketCreatedDate:result.ticket.get("opendiscord:opened-on").value,
                     ticketDeletedDate:Date.now(),
-                    transcriptType:(result.data && "contents" in result.data) ? "localContents" : "remoteUrl",
-                    transcriptContents:(result.data && "contents" in result.data) ? result.data.contents : null,
-                    transcriptUrl:(result.data && "url" in result.data) ? result.data.url : null,
+                    transcriptType:"remoteUrl",
+                    transcriptContents:null,
+                    transcriptUrl:(result.data as any)?.storageUrl ?? ((result.data && "url" in result.data) ? result.data.url : null),
                 }
                 transcriptDatabase.set("opendiscord:transcript","C:"+result.channel.id+",U:"+result.user.id,historyData)
 

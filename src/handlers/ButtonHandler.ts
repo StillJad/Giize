@@ -1,3 +1,4 @@
+import {ticketArchiveService} from '../services/tickets/TicketArchiveService.js';
 import { Events, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import { levelService } from "../services/community/LevelService.js";
 import { client } from "../client.js";
@@ -46,6 +47,7 @@ function decodeVerificationUsername(value: string) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
+    if(interaction.customId.startsWith("archive_")){await ticketArchiveService.button(interaction);return;}
     if (interaction.customId === "account_verify") {
       await interaction.showModal(new ModalBuilder().setCustomId("account_verify_submit").setTitle("Minecraft Verification").addComponents(
         new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder().setCustomId("username").setLabel("Minecraft username / Bedrock gamertag").setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32)),

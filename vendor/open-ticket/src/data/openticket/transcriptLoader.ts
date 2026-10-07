@@ -1,4 +1,4 @@
-import {closureEmbed} from "../../../plugins/glurps/ticket-summary.js";
+import {archiveService,compactClosureEmbed} from "../../../plugins/glurps/ticket-summary.js";
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import {opendiscord, api, utilities} from "../../index.js"
@@ -62,7 +62,7 @@ export async function loadAllTranscriptCompilers(){
     }
 
     //TEXT COMPILER
-    opendiscord.transcripts.add(new api.ODTranscriptCompiler<{contents:string},null>("opendiscord:text-compiler",undefined,async (ticket,channel,user) => {
+    opendiscord.transcripts.add(new api.ODTranscriptCompiler<{contents:string;storageUrl?:string},null>("opendiscord:text-compiler",undefined,async (ticket,channel,user) => {
         //COMPILE
         const rawMessages = await collector.collectAllMessages(ticket)
         if (!rawMessages) return {ticket,channel,user,success:false,errorReason:"Unable to collect messages! Channel not found!",messages:null,data:null}
@@ -167,14 +167,11 @@ export async function loadAllTranscriptCompilers(){
         final.push(finalMessages.join("\n\n"))
 
         const contents=final.join("\n");
-        const archive = resolve(process.env.GLURPS_ROOT ?? process.cwd(), "data/transcripts");
-        await mkdir(archive, {recursive:true});
-        await writeFile(resolve(archive, `${channel.id}-${Date.now()}.txt`), contents, "utf8");
-        return {ticket,channel,user,success:true,errorReason:null,messages,data:{contents}}
+        const storageUrl=await (await archiveService()).store(channel.id,channel.guild,contents);
+        return {ticket,channel,user,success:true,errorReason:null,messages,data:{contents,storageUrl}}
     },async (result) => {
-        const attachment={attachment:Buffer.from(result.data!.contents,"utf8"),name:"transcript.txt"};
-        const build=async (full:boolean)=>({id:new api.ODId("opendiscord:ticket-closed-summary"),ephemeral:false,message:{embeds:[await closureEmbed(result.ticket,result.channel,result.user,full)],files:[attachment],allowedMentions:{parse:[] as []}}});
-        return {channelMessage:await build(true),creatorDmMessage:await build(false),participantDmMessage:undefined,activeAdminDmMessage:undefined,everyAdminDmMessage:undefined};
+        await (await archiveService()).deliver(result.channel.id,result.channel.client,await compactClosureEmbed(result.ticket,result.channel,result.user),result.ticket.get('opendiscord:opened-by').value??result.user.id,process.env.TICKET_LOGS_CHANNEL_ID??'');
+        return {};
     }))
 
     //HTML COMPILER

@@ -392,6 +392,7 @@ export class EventService {
 
     const participants = this.getParticipants(event.id);
 
+    if (shouldExport && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {await safeEdit(interaction,{content:"Administrator permission is required to export rosters."});return;}
     if (shouldExport) {
       const exportFile = await this.createParticipantExportFile(event, participants);
 

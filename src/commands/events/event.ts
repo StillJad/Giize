@@ -22,7 +22,7 @@ export const command: Command = {
             .setName("channel")
             .setDescription("Channel where the event panel will be posted.")
             .addChannelTypes(ChannelType.GuildText)
-            .setRequired(true)
+            .setRequired(false)
         )
         .addStringOption(option =>
           option.setName("date").setDescription("Discord timestamp, like <t:1735689600:F>.").setRequired(false)
@@ -139,7 +139,7 @@ export const command: Command = {
         verifyRequired: false,
         googleFormsEnabled: interaction.options.getBoolean("google_forms") ?? false,
         googleFormUrl: interaction.options.getString("google_form_url"),
-        channel: interaction.options.getChannel("channel", true) as TextChannel,
+        channel: (interaction.options.getChannel("channel") ?? interaction.channel) as TextChannel,
       });
       return;
     }

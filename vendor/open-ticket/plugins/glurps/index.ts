@@ -24,7 +24,7 @@ opendiscord.events.get('afterSlashCommandsLoaded').listen(manager=>{
     const json=command.data.toJSON();
     manager.add(new api.ODSlashCommand(`glurps:${json.name}`,{
       type:ApplicationCommandType.ChatInput,name:json.name,description:json.description,options:json.options,
-      defaultMemberPermissions:PermissionFlagsBits.Administrator,dmPermission:false,
+      defaultMemberPermissions:json.default_member_permissions===null?null:PermissionFlagsBits.Administrator,dmPermission:false,
       contexts:[InteractionContextType.Guild],integrationTypes:[ApplicationIntegrationType.GuildInstall],
     } as api.ODSlashCommandBuilder));
   }

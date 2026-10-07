@@ -1,3 +1,4 @@
+import {ticketArchiveService} from '../services/tickets/TicketArchiveService.js';
 import { Events } from "discord.js";
 import { beginVerification } from "../commands/verification/verify.js";
 import { client } from "../client.js";
@@ -9,6 +10,7 @@ import { logger } from "../utils/logger.js";
 client.on(Events.InteractionCreate, async interaction => {
   try {
     if (!interaction.isModalSubmit()) return;
+    if(interaction.customId.startsWith("archive_reason_submit:")){await ticketArchiveService.modal(interaction);return;}
     if(interaction.customId==="account_verify_submit") {
       const platform=interaction.fields.getTextInputValue("platform").trim().toLowerCase();
       if(platform!=="java" && platform!=="bedrock") {await interaction.reply({content:"Enter Java or Bedrock as the edition.",flags:64});return;}

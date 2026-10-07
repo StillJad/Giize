@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Command } from "../types/Command.js";
 
+export const publicCommands=new Set(['level','leaderboard','help','ping','server','status','participants']);
+
 export async function loadCommands() {
   const commands = new Collection<string, Command>();
   const currentFile = fileURLToPath(import.meta.url);
@@ -23,13 +25,14 @@ export async function loadCommands() {
 
     if (!command?.data?.name || !command.execute) continue;
     if (commands.has(command.data.name)) throw new Error(`Duplicate command: ${command.data.name}`);
-    command.data.setDefaultMemberPermissions(PermissionFlagsBits.Administrator);
+    const publicCommand=publicCommands.has(command.data.name);
+    command.data.setDefaultMemberPermissions(publicCommand?null:PermissionFlagsBits.Administrator);
     command.data.setDMPermission(false);
     const execute = command.execute.bind(command);
     commands.set(command.data.name, {
       data: command.data,
       async execute(interaction) {
-        if (!interaction.inGuild() || !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        if (!interaction.inGuild() || (!publicCommand && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator))) {
           await interaction.reply({ content: "Administrator permission is required to use this command.", flags: 64 });
           return;
         }

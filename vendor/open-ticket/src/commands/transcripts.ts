@@ -1,3 +1,4 @@
+import {archiveService} from '../../plugins/glurps/ticket-summary.js';
 ///////////////////////////////////////
 //TRANSCRIPTS COMMAND
 ///////////////////////////////////////
@@ -30,6 +31,8 @@ export async function registerCommandResponders(){
                 .sort((a,b) => (b.ticketDeletedDate ?? 0)-(a.ticketDeletedDate ?? 0))
                 .slice(0,20)
 
+            const archives=await archiveService();
+            for(const transcript of transcriptList){const row=archives.row(transcript.ticketId);if(!row)continue;try{const storage=await channel.client.channels.fetch(row.storage_channel);if(storage?.isTextBased()){const message=await storage.messages.fetch(row.storage_message);transcript.transcriptUrl=message.attachments.first()?.url??transcript.transcriptUrl;}}catch{}}
             await instance.reply(await opendiscord.builders.messages.getSafe("opendiscord:transcript-history").build(origin,{guild,channel,user,transcriptUser,transcriptList}))
         }),
         new api.ODWorker("opendiscord:logs",-1,(instance,params,origin,cancel) => {

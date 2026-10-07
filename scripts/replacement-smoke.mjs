@@ -15,16 +15,16 @@ try {
   }
   const fields = new Set(sqlite.prepare('PRAGMA table_info(events)').all().map(row => row.name));
   for (const field of ['verify_required', 'google_forms_enabled', 'google_form_url']) assert(fields.has(field));
-  const { loadCommands } = await import('../dist/handlers/CommandHandler.js');
+  const { loadCommands, publicCommands } = await import('../dist/handlers/CommandHandler.js');
   const commands = await loadCommands();
   assert.equal(commands.size, 24);
   for (const name of ['verify', 'unverify', 'event', 'events', 'participants', 'ticket', 'ticketstaff', 'ticketpanel', 'moderation', 'adminmod', 'channel', 'purge', 'server', 'status', 'help', 'ping', 'automod', 'levels', 'cases', 'applications', 'verify-panel']) {
     assert(commands.has(name), `Missing /${name}`);
     const command = commands.get(name);
     const definition = command.data.toJSON();
-    assert.equal(definition.default_member_permissions, PermissionFlagsBits.Administrator.toString(), `/${name} is visible by default to non-admins`);
+    assert.equal(definition.default_member_permissions, publicCommands.has(name)?null:PermissionFlagsBits.Administrator.toString(), `/${name} is visible by default to non-admins`);
     assert.equal(definition.dm_permission, false);
-    for (const permissions of [null, new PermissionsBitField(), new PermissionsBitField(PermissionFlagsBits.ManageGuild)]) {
+    if(!publicCommands.has(name)) for (const permissions of [null, new PermissionsBitField(), new PermissionsBitField(PermissionFlagsBits.ManageGuild)]) {
       let response;
       await command.execute({ inGuild: () => true, memberPermissions: permissions, reply: async payload => { response = payload; } });
       assert.equal(response?.flags, 64);
