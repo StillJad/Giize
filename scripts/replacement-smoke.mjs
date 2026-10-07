@@ -17,8 +17,8 @@ try {
   for (const field of ['verify_required', 'google_forms_enabled', 'google_form_url']) assert(fields.has(field));
   const { loadCommands, publicCommands } = await import('../dist/handlers/CommandHandler.js');
   const commands = await loadCommands();
-  assert.equal(commands.size, 24);
-  for (const name of ['verify', 'unverify', 'event', 'events', 'participants', 'ticket', 'ticketstaff', 'ticketpanel', 'moderation', 'adminmod', 'channel', 'purge', 'server', 'status', 'help', 'ping', 'automod', 'levels', 'cases', 'applications', 'verify-panel']) {
+  assert.equal(commands.size, 25);
+  for (const name of ['verify', 'unverify', 'event', 'events', 'participants', 'ticket', 'ticketstaff', 'ticketpanel', 'moderation', 'adminmod', 'channel', 'purge', 'server', 'status', 'help', 'ping', 'automod', 'levels', 'cases', 'applications', 'verify-panel', 'lobbymusic']) {
     assert(commands.has(name), `Missing /${name}`);
     const command = commands.get(name);
     const definition = command.data.toJSON();
@@ -35,7 +35,7 @@ try {
     assert.match(dmResponse?.content ?? '', /Administrator/);
   }
   sqlite.close();
-  console.log('Replacement database and 24-command registry check passed.');
+  console.log('Replacement database and 25-command registry check passed.');
 } finally {
   rmSync(directory, { recursive: true, force: true });
 }
