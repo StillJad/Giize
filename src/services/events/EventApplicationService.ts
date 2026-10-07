@@ -74,13 +74,6 @@ export class EventApplicationService {
 
     const verified = this.getVerifiedAccount(interaction.guildId!, interaction.user.id);
 
-    if (event.verifyRequired && !verified) {
-      await safeReply(interaction, {
-        content: "You must verify your Minecraft account before applying for this event. Use the Minecraft verification panel.",
-        flags: 64,
-      });
-      return;
-    }
 
     if (this.hasExistingApplication(event.id, interaction.user.id)) {
       await safeReply(interaction, { content: "You have already applied for this event.", flags: 64 });
@@ -130,13 +123,6 @@ export class EventApplicationService {
       return;
     }
 
-    if (event.verifyRequired && !this.getVerifiedAccount(interaction.guildId!, interaction.user.id)) {
-      await safeReply(interaction, {
-        content: "You must verify your Minecraft account before applying for this event. Use the Minecraft verification panel.",
-        flags: 64,
-      });
-      return;
-    }
 
     await safeReply(interaction, {
       content: "Continue to the event application form:",
@@ -179,10 +165,6 @@ export class EventApplicationService {
 
     const verified = this.getVerifiedAccount(interaction.guildId, interaction.user.id);
 
-    if (event.verifyRequired && !verified) {
-      await safeEdit(interaction, { content: "You must verify your Minecraft account before applying for this event. Use the Minecraft verification panel." });
-      return;
-    }
 
     const member = interaction.member instanceof GuildMember
       ? interaction.member

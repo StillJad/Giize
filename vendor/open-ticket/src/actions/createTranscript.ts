@@ -41,6 +41,7 @@ export async function registerActions(){
                 throw new api.ODSystemError("ODAction(ot:create-transcript):ODWorker(ot:init-transcript) => Instance is missing transcript compiler!")
             }
             
+            instance.initData = null;
             //run transcript compiler init()
             await opendiscord.events.get("onTranscriptInit").emit([opendiscord.transcripts,ticket,channel,user])
             if (instance.compiler.init){

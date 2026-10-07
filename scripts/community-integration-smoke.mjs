@@ -15,10 +15,12 @@ try {
  assert.equal(levelService.settings('guild').reward_level,25);
  assert.equal(levelService.settings('guild').reward_role,'1515691359862915162');
  assert(levelService.award('guild','user','a useful message',100000));
- assert(!levelService.award('guild','user','another useful message',120000));
- assert(!levelService.award('guild','user','a useful message',200000));
- assert(levelService.award('guild','user','different useful message',200000));
- assert.equal(levelService.get('guild','user').xp,40);
+ assert(levelService.award('guild','user','another useful message',104000));
+ assert(!levelService.award('guild','user','rapid reply',105000));
+ assert(!levelService.award('guild','user','cooldown message',120000));
+ assert(levelService.award('guild','user','different useful message',136000));
+ assert(!levelService.award('guild','user',Array(41).fill('word').join(' '),140000));
+ assert.equal(levelService.get('guild','user').xp,60);
  assert.equal(caseService.record('guild','user','admin','Warning','Reason'),1);
  assert.equal(caseService.record('guild','user','admin','Timeout','Reason','10m'),2);
  assert.equal(caseService.record('other','user','admin','Warning','Reason'),1);
@@ -35,7 +37,7 @@ try {
  client.emit('interactionCreate',{...input,memberPermissions:new PermissionsBitField(PermissionFlagsBits.Administrator)});assert.equal(handled,1);
  client.emit('interactionCreate',{...input,commandName:'event'});assert.equal(denied,1,'Custom commands must be handled only by Glurps');
  let rolePermissions;
- const guild={id:'guild',roles:{fetch:async()=>({managed:false,editable:true,permissions:new PermissionsBitField(),setPermissions:async value=>rolePermissions=value})}};
+ const guild={id:'guild',roles:{cache:{has:()=>true,find:()=>({id:'milestone'})},fetch:async()=>({managed:false,editable:true,permissions:new PermissionsBitField(),setPermissions:async value=>rolePermissions=value})}};
  await levelService.prepareReward(guild);assert(new PermissionsBitField(rolePermissions).has(PermissionFlagsBits.EmbedLinks));
  console.log('XP cooldown, repeats, level-25 role, Embed Links, case history, and Open Ticket command isolation checks passed.');
 } finally {sqlite.close();rmSync(directory,{recursive:true,force:true});}

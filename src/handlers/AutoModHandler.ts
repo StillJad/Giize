@@ -17,3 +17,5 @@ client.on(Events.MessageCreate, async message => {
 setInterval(() => {
   autoModTracker.cleanup();
 }, 60_000).unref();
+
+client.on(Events.MessageReactionAdd,async (reaction,user)=>{try {await levelService.handleReaction(reaction as any,user as any);} catch(error){logger.warn('Reaction XP failed.',error);}});

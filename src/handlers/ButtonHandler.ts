@@ -121,7 +121,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           glurpsEmbed()
             .setTitle("Verification Cancelled")
             .setDescription("Your Minecraft account was not linked.")
-            .setFooter({ text: "Glurps Events Verification System" }),
+            .setFooter({ text: "Event Bot Verification System" }),
         ],
         components: [],
       });
@@ -178,7 +178,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               { name: "Platform", value: platformLabel, inline: true },
               { name: "Nickname", value: result.nickname, inline: false }
             )
-            .setFooter({ text: "Glurps Events Verification System" }),
+            .setFooter({ text: "Event Bot Verification System" }),
         ],
         components: [],
       });

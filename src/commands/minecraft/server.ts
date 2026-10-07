@@ -6,10 +6,10 @@ import { config } from "../../config/config.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("server")
-    .setDescription("Shows the Glurps Events Minecraft server IP."),
+    .setDescription("Shows the Event Bot Minecraft server IP."),
   async execute(interaction) {
     const embed = glurpsEmbed()
-      .setTitle("Glurps Events Server")
+      .setTitle("Event Bot Server")
       .addFields(
         { name: "IP", value: `\`${config.mcHost}\``, inline: true },
         { name: "Port", value: `\`${config.mcPort}\``, inline: true },

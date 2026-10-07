@@ -94,7 +94,7 @@ export async function beginVerification(interaction: import("discord.js").ChatIn
         { name: "Platform", value: platformLabel, inline: true },
         { name: "Nickname After Verification", value: nicknameAfterVerification, inline: false }
       )
-      .setFooter({ text: "Glurps Events Verification System" });
+      .setFooter({ text: "Event Bot Verification System" });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()

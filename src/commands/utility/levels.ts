@@ -6,8 +6,6 @@ import {glurpsEmbed} from '../../utils/embeds.js';
 export const command:Command={
  data:new SlashCommandBuilder().setName('levels').setDescription('Manage community leveling.')
  .addSubcommand(s=>s.setName('panel').setDescription('Post member rank and leaderboard buttons.').addChannelOption(o=>o.setName('channel').setDescription('Where to post.').addChannelTypes(ChannelType.GuildText).setRequired(true)))
- .addSubcommand(s=>s.setName('rank').setDescription('View a member rank.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)))
- .addSubcommand(s=>s.setName('leaderboard').setDescription('View the top ten.'))
  .addSubcommand(s=>s.setName('set').setDescription('Set a member level.').addUserOption(o=>o.setName('user').setDescription('Member.').setRequired(true)).addIntegerOption(o=>o.setName('level').setDescription('Level.').setMinValue(0).setMaxValue(1000).setRequired(true)))
  .addSubcommand(s=>s.setName('configure').setDescription('Configure leveling and role reward.').addBooleanOption(o=>o.setName('enabled').setDescription('Enable XP.')).addIntegerOption(o=>o.setName('reward_level').setDescription('Required level for the role.').setMinValue(1).setMaxValue(1000)).addRoleOption(o=>o.setName('reward_role').setDescription('Role granting Embed Links.'))),
  async execute(i){

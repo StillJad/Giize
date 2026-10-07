@@ -25,7 +25,7 @@ let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  logger.info("Stopping Glurps Bot.");
+  logger.info("Stopping Event Bot.");
   const timeout = setTimeout(() => process.exit(1), 10_000);
   timeout.unref();
   reminderService.stop();
@@ -48,7 +48,7 @@ logger.info("✓ Loaded modals");
 logger.info("✓ Loaded AutoMod");
 
 const onReady = (ready: typeof client) => {
-  logger.info(`✓ Logged in as ${ready.user?.tag ?? "Glurps Bot"}`);
+  logger.info(`✓ Logged in as ${ready.user?.tag ?? "Event Bot"}`);
   autoModService.initializeForGuild(config.guildId);
   void ready.guilds.fetch(config.guildId).then(guild => levelService.prepareReward(guild)).catch(error => logger.warn("Level reward setup needs attention.", error));
   reminderService.start(client);

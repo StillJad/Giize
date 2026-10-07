@@ -1,6 +1,6 @@
-# Glurps Bot v2
+# Event Bot v2
 
-A Discord-only bot built on **Open Ticket v4.2.2**, with Glurps event applications, moderation, AutoMod, and community leveling attached to the same Discord client. No web dashboard. Full Open Ticket source, its GPL license, and attribution are included.
+A Discord-only bot built on **Open Ticket v4.2.2**, with Event event applications, moderation, AutoMod, and community leveling attached to the same Discord client. No web dashboard. Full Open Ticket source, its GPL license, and attribution are included.
 
 ## Features
 
@@ -51,7 +51,7 @@ docker compose build
 docker compose up -d
 ```
 
-Stop the previous bot before starting the replacement with the same token. This is one Discord connection, shared by the Open Ticket engine and the Glurps plugin.
+Stop the previous bot before starting the replacement with the same token. This is one Discord connection, shared by the Open Ticket engine and the Event plugin.
 
 The old dashboard service is absent from this Compose project. If it also serves a public website, preserve that website separately before removing its old service.
 
@@ -62,3 +62,5 @@ Local TypeScript builds and automated workflow checks cover application decision
 ## Source
 
 See `THIRD_PARTY.md` and `vendor/open-ticket/UPSTREAM.md` for upstream versions and custom changes. This distribution is GPL-3.0-only, with dependencies retaining their own licenses.
+
+Update: normal messages up to 40 words earn 20 XP; messages under 3 seconds apart or repeats trigger a 30-second XP penalty. Images add 10 XP and replies add 5 XP. Receiving a new reaction adds 5 XP at most once per 30 seconds; self-reactions and repeat reactions do not count. Use `/level [user]`, `/leaderboard`, and `/panel-edit channel message [title] [description]`. Milestone roles start at 1 then every five levels through 100. Only the highest milestone role is retained; the level-25 Embed Links reward is separate. Event applications do not require verification.

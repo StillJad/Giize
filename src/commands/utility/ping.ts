@@ -4,7 +4,7 @@ import type { Command } from "../../types/Command.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("ping")
-    .setDescription("Checks Glurps Bot latency."),
+    .setDescription("Checks Event Bot latency."),
   async execute(interaction) {
     await interaction.reply({
       content: `Pong! ${interaction.client.ws.ping}ms`,

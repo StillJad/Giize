@@ -309,6 +309,7 @@ const main = async () => {
         opendiscord.client.intents.push(
             "Guilds",
             "GuildMessages",
+            "GuildMessageReactions",
             "DirectMessages",
             "GuildEmojisAndStickers",
             "GuildMembers",

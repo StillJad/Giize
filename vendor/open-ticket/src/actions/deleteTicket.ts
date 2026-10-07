@@ -23,7 +23,7 @@ export async function registerActions(){
             //update ticket message (no await)
             openticketUtils.updateTicketMessage(guild,channel,user,ticket)
 
-            if (params.sendMessage) await channel.send((await opendiscord.builders.messages.getSafe("opendiscord:delete-message").build(origin,{guild,channel,user,ticket,reason})).message)
+            if (params.sendMessage) await channel.send({content:"Preparing the transcript before deleting this ticket."})
         
             //create transcript
             if (!params.withoutTranscript){

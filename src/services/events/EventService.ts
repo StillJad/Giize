@@ -950,7 +950,7 @@ export class EventService {
       maxPlayers: row.max_players,
       pingRole: row.ping_role,
       goingRole: row.going_role,
-      verifyRequired: Boolean(row.verify_required),
+      verifyRequired: false,
       googleFormsEnabled: Boolean(row.google_forms_enabled),
       googleFormUrl: row.google_form_url,
       status: row.status,

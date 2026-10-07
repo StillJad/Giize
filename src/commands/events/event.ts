@@ -5,7 +5,7 @@ import type { Command } from "../../types/Command.js";
 export const command: Command = {
   data: new SlashCommandBuilder()
     .setName("event")
-    .setDescription("Manage Glurps Events.")
+    .setDescription("Manage Event Bot.")
     .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
     .addSubcommand(subcommand =>
       subcommand
@@ -44,9 +44,6 @@ export const command: Command = {
         )
         .addRoleOption(option =>
           option.setName("going_role").setDescription("Role given to members who RSVP Going").setRequired(false)
-        )
-        .addBooleanOption(option =>
-          option.setName("verify_required").setDescription("Require Minecraft verification before applying.").setRequired(false)
         )
         .addBooleanOption(option =>
           option.setName("google_forms").setDescription("Send applicants to a Google Form.").setRequired(false)
@@ -94,9 +91,6 @@ export const command: Command = {
           option.setName("going_role").setDescription("New role given to members who RSVP Going.").setRequired(false)
         )
         .addBooleanOption(option =>
-          option.setName("verify_required").setDescription("Require Minecraft verification before applying.").setRequired(false)
-        )
-        .addBooleanOption(option =>
           option.setName("google_forms").setDescription("Send applicants to a Google Form.").setRequired(false)
         )
         .addStringOption(option =>
@@ -142,7 +136,7 @@ export const command: Command = {
         maxPlayers: interaction.options.getInteger("max_players"),
         pingRole: interaction.options.getRole("ping_role") as Role | null,
         goingRole: interaction.options.getRole("going_role") as Role | null,
-        verifyRequired: interaction.options.getBoolean("verify_required") ?? true,
+        verifyRequired: false,
         googleFormsEnabled: interaction.options.getBoolean("google_forms") ?? false,
         googleFormUrl: interaction.options.getString("google_form_url"),
         channel: interaction.options.getChannel("channel", true) as TextChannel,
@@ -162,7 +156,7 @@ export const command: Command = {
         maxPlayers: interaction.options.getInteger("max_players"),
         pingRole: interaction.options.getRole("ping_role") as Role | null,
         goingRole: interaction.options.getRole("going_role") as Role | null,
-        verifyRequired: interaction.options.getBoolean("verify_required"),
+        verifyRequired: false,
         googleFormsEnabled: interaction.options.getBoolean("google_forms"),
         googleFormUrl: interaction.options.getString("google_form_url"),
       });

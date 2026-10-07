@@ -76,21 +76,21 @@ export class VerificationService {
     return glurpsEmbed()
       .setTitle("Verification Failed")
       .setDescription("That Minecraft username could not be found.\n\nPlease double-check the spelling and try again.")
-      .setFooter({ text: "Glurps Events Verification System" });
+      .setFooter({ text: "Event Bot Verification System" });
   }
 
   static bedrockFailureEmbed() {
     return glurpsEmbed()
       .setTitle("Verification Failed")
       .setDescription("That Bedrock gamertag format is invalid.\n\nPlease double-check the spelling and try again.")
-      .setFooter({ text: "Glurps Events Verification System" });
+      .setFooter({ text: "Event Bot Verification System" });
   }
 
   static saveFailureEmbed() {
     return glurpsEmbed()
       .setTitle("Verification Failed")
       .setDescription("Verification could not be saved. Please try again.")
-      .setFooter({ text: "Glurps Events Verification System" });
+      .setFooter({ text: "Event Bot Verification System" });
   }
 
   getStoredAccounts(guildId: string, discordId: string): StoredMinecraftAccounts {
@@ -294,7 +294,7 @@ export class VerificationService {
             { name: "Stored Java Account", value: stored.javaUsername ?? "None", inline: true },
             { name: "Stored Bedrock Account", value: stored.bedrockUsername ?? "None", inline: true }
           )
-          .setFooter({ text: "Glurps Events Verification System" })
+          .setFooter({ text: "Event Bot Verification System" })
           .setTimestamp(),
       ],
     }).catch(error => logger.warn("Failed to send verification log.", error));

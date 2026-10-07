@@ -46,7 +46,7 @@ export async function registerCommandResponders(){
             //start deleting ticket
             await instance.defer(false)
             const reason = instance.options.getString("reason",false)
-            await instance.reply(await opendiscord.builders.messages.getSafe("opendiscord:delete-message").build(origin,{guild,channel,user,ticket,reason}))
+            await instance.reply({id:new api.ODId("opendiscord:deletion-pending"),ephemeral:true,message:{content:"Preparing the transcript before deleting this ticket."}})
             await opendiscord.actions.get("opendiscord:delete-ticket").run(origin,{guild,channel,user,ticket,reason,sendMessage:false,withoutTranscript})
         }),
         new api.ODWorker("opendiscord:logs",-1,(instance,params,origin,cancel) => {

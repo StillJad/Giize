@@ -5,7 +5,7 @@ import { glurpsEmbed } from "../../utils/embeds.js";
 type PlaceholderTarget = GuildMember | User;
 
 export const welcomeTitle = "Welcome, {username}! 👋";
-export const welcomeDescription = `Welcome to Glurps Events!
+export const welcomeDescription = `Welcome to Event Bot!
 
 Please make sure to read {rules} and keep an eye on {announcements} for event updates.
 
