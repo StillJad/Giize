@@ -1,3 +1,4 @@
+import {ticketRecord,recordClosure} from '../../plugins/glurps/ticket-summary.js';
 ///////////////////////////////////////
 //TICKET DELETION SYSTEM
 ///////////////////////////////////////
@@ -25,6 +26,8 @@ export async function registerActions(){
 
             if (params.sendMessage) await channel.send({content:"Preparing the transcript before deleting this ticket."})
         
+            const closure=await ticketRecord(channel.id);
+            if(!closure.closed_at && !ticket.get('opendiscord:closed').value) await recordClosure(channel.id,user.id,reason);
             //create transcript
             if (!params.withoutTranscript){
                 const transcriptRes = await opendiscord.actions.get("opendiscord:create-transcript").run(origin,{guild,channel,user,ticket})
