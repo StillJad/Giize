@@ -30,3 +30,8 @@ opendiscord.events.get('afterSlashCommandsLoaded').listen(manager=>{
   }
   installAdministratorDispatcher(manager,opendiscord.client.client);
 });
+opendiscord.events.get('afterSlashCommandsRegistered').listen(async manager=>{
+  const allowed=new Set(manager.getAll().map(command=>command.name));
+  const registered=await opendiscord.client.client.application!.commands.fetch();
+  for(const command of registered.values()) if(command.type===ApplicationCommandType.ChatInput && !allowed.has(command.name)) await command.delete();
+});
