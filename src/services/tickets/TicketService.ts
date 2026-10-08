@@ -148,7 +148,7 @@ export class TicketService {
       });
 
       await ticketChannel.send({
-        content: `${interaction.user} <@&${config.staffRoleId}>`,
+        content: `${interaction.user} <@&${config.ticketStaffRoleId}>`,
         embeds: [
           ticketRenderer.renderWelcomeEmbed({
             ticketNumber,
@@ -160,7 +160,7 @@ export class TicketService {
           }),
         ],
         components: [this.closeTicketRow()],
-        allowedMentions: { users:[userId],roles:config.staffRoleId?[config.staffRoleId]:[],parse:[] },
+        allowedMentions: { users:[userId],roles:config.ticketStaffRoleId?[config.ticketStaffRoleId]:[],parse:[] },
       });
 
       this.audit(guild.id,ticketChannel.id,userId,"Opened");

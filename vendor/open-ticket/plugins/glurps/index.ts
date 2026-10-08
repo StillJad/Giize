@@ -35,6 +35,8 @@ opendiscord.events.get('afterSlashCommandsRegistered').listen(async manager=>{
   const allowed=new Set(manager.getAll().map(command=>command.name));
   const registered=await opendiscord.client.client.application!.commands.fetch();
   for(const command of registered.values()) if(command.type===ApplicationCommandType.ChatInput && !allowed.has(command.name)) await command.delete();
+  const colorPicker=registered.find(command=>command.name==='colorpicker');
+  if(colorPicker && process.env.GUILD_ID) await opendiscord.client.client.application!.commands.create({name:colorPicker.name,description:colorPicker.description,options:colorPicker.options as any,defaultMemberPermissions:PermissionFlagsBits.Administrator},process.env.GUILD_ID);
 });
 
 import {ticketRecord,recordClosure} from './ticket-summary.js';

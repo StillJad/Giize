@@ -4,6 +4,7 @@ export const config = {
   token: process.env.DISCORD_TOKEN ?? "",
   clientId: process.env.CLIENT_ID ?? "",
   guildId: process.env.GUILD_ID ?? "",
+  ticketStaffRoleId: process.env.TICKET_STAFF_ROLE_ID ?? "1557371367241027705",
   staffRoleId: process.env.STAFF_ROLE_ID ?? "",
   verifyRoleId: process.env.VERIFY_ROLE_ID ?? process.env.VERIFIED_ROLE_ID ?? "",
   javaVerifiedRoleId: process.env.JAVA_VERIFIED_ROLE_ID ?? "",
