@@ -4,7 +4,7 @@
   "description": "Administrator-only Discord bot for Glurps Events",
   "main": "dist/index.js",
   "scripts": {
-    "test": "npm run build && node scripts/verification-schema-smoke.mjs && node scripts/command-regression-smoke.mjs && node scripts/event-application-settings-smoke.mjs && node scripts/replacement-smoke.mjs && node scripts/application-workflow-smoke.mjs && node scripts/automod-smoke.mjs && node scripts/start-open-ticket.mjs --check && node scripts/community-integration-smoke.mjs && node scripts/ticket-summary-smoke.mjs && node scripts/member-update-smoke.mjs && node scripts/ticket-archive-smoke.mjs && node scripts/lobby-music-smoke.mjs && node scripts/level-panel-smoke.mjs && node scripts/reward-color-smoke.mjs && node scripts/legacy-ticket-smoke.mjs",
+    "test": "npm run build && node scripts/verification-schema-smoke.mjs && node scripts/command-regression-smoke.mjs && node scripts/event-application-settings-smoke.mjs && node scripts/replacement-smoke.mjs && node scripts/application-workflow-smoke.mjs && node scripts/automod-smoke.mjs && node scripts/start-open-ticket.mjs --check && node scripts/community-integration-smoke.mjs && node scripts/ticket-summary-smoke.mjs && node scripts/member-update-smoke.mjs && node scripts/ticket-archive-smoke.mjs && node scripts/lobby-music-smoke.mjs && node scripts/level-panel-smoke.mjs && node scripts/reward-color-smoke.mjs && node scripts/legacy-ticket-smoke.mjs && node scripts/ticket-bridge-smoke.mjs",
     "dev": "npm run build && npm start",
     "deploy": "node scripts/start-open-ticket.mjs --check",
     "build": "rm -rf dist && tsc && tsc -p vendor/open-ticket/tsconfig.json",

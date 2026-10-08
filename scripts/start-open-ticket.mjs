@@ -15,15 +15,15 @@ export function configureEngine(env=process.env) {
  for(const key of Object.keys(general.permissions)) general.permissions[key]='admin';
  general.permissions.help='none';general.permissions.claim='none';general.permissions.unclaim='none';
  general.logs.logMessages.deleting={dm:false,logs:false};general.logs.enabled=Boolean(env.TICKET_LOGS_CHANNEL_ID);general.logs.channel=env.TICKET_LOGS_CHANNEL_ID??'';
- general.ticketSystem.pinFirstTicketMessage=false;general.ticketSystem.enableTicketClaimButtons=false;general.ticketSystem.enableTicketPinButtons=false;general.ticketSystem.closeEmoji="🔒";general.ticketSystem.enableDeleteWithoutTranscript=false;general.ticketSystem.claimedCategories=[];
+ general.ticketSystem.pinFirstTicketMessage=false;general.ticketSystem.enableTicketClaimButtons=true;general.ticketSystem.enableTicketPinButtons=false;general.ticketSystem.closeEmoji="🔒";general.ticketSystem.enableDeleteWithoutTranscript=false;general.ticketSystem.claimedCategories=[];
  general.ticketSystem.closedCategory.enabled=false;general.ticketSystem.backupCategory.enabled=false;
  general.ticketSystem.limits.userMaximum=1;general.ticketSystem.askPriorityOnTicketCreation=false;
  const base=read('options.jsonc').find(option=>option.type==='ticket');
  const options=[['support','Support','🎫'],['report','Player Report','🚨'],['appeal','Appeal','📝']].map(([id,name,emoji])=>{
   const option=structuredClone(base);option.id=id;option.name=name;option.description=`Open a private ${name.toLowerCase()} ticket.`;
-  option.button={emoji,label:name,color:'blue'};option.questions=['issue'];option.ticketAdmins=[env.TICKET_STAFF_ROLE_ID??'1557371367241027705'];option.readonlyAdmins=[];
+  option.button={emoji,label:name,color:'blue'};option.questions=['issue'];option.ticketAdmins=[...new Set([env.STAFF_ROLE_ID,env.TICKET_STAFF_ROLE_ID??'1557371367241027705'].filter(Boolean))];option.readonlyAdmins=[];
   option.channel.category=env.TICKET_CATEGORY_ID??'';option.channel.prefix='ticket-';option.channel.topic=`Event ${name}`;
-  option.dmMessage.enabled=false;option.ticketMessage.embed.title=`${name} Ticket`;option.ticketMessage.embed.description='Describe what happened and include any useful evidence. An administrator will help you here.';
+  option.dmMessage.enabled=false;option.ticketMessage.embed.title=`${name} Ticket`;option.ticketMessage.embed.description='Describe what happened and include any useful evidence. A staff member will help you here.';
   option.ticketMessage.embed.fields=[];option.ticketMessage.embed.customColor='#5865F2';option.ticketMessage.ping={'@here':false,'@everyone':false,custom:[env.TICKET_STAFF_ROLE_ID??'1557371367241027705']};
   option.autoclose.enableInactiveHours=true;option.autoclose.inactiveHours=48;option.autoclose.disableOnClaim=true;
   option.autodelete.enableInactiveDays=false;option.cooldown.enabled=true;option.cooldown.cooldownMinutes=5;
@@ -39,7 +39,7 @@ export function configureEngine(env=process.env) {
 if(process.argv.includes('--check')) {
  const settings=configureEngine({GUILD_ID:'123',TICKET_CATEGORY_ID:'456',TICKET_LOGS_CHANNEL_ID:'789'});
  if(!settings.options.length || settings.general.textCommands || settings.general.permissions.help!=='none') throw new Error('Invalid integration configuration');
- if(settings.general.ticketSystem.pinFirstTicketMessage || settings.general.ticketSystem.enableTicketClaimButtons || settings.general.ticketSystem.enableTicketPinButtons || settings.panel.settings.describeOptionsInEmbedFields || settings.panel.embed.footer) throw new Error('Ticket simplification configuration failed');
+ if(settings.general.ticketSystem.pinFirstTicketMessage || !settings.general.ticketSystem.enableTicketClaimButtons || settings.general.ticketSystem.enableTicketPinButtons || settings.panel.settings.describeOptionsInEmbedFields || settings.panel.embed.footer) throw new Error('Ticket simplification configuration failed');
  console.log('Open Ticket integration configuration checked.');
 } else {
  for(const key of ['DISCORD_TOKEN','CLIENT_ID','GUILD_ID']) if(!process.env[key]) throw new Error(`Missing ${key}`);

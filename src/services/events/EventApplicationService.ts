@@ -372,6 +372,7 @@ export class EventApplicationService {
       type: ChannelType.GuildText,
       parent: category?.type === ChannelType.GuildCategory ? category.id : undefined,
       permissionOverwrites: [
+        ...(config.staffRoleId && config.staffRoleId!==config.ticketStaffRoleId?[{id:config.staffRoleId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.AttachFiles,PermissionFlagsBits.EmbedLinks]}]:[]),
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
         {
           id: application.discordId,

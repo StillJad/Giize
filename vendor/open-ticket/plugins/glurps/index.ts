@@ -12,7 +12,6 @@ opendiscord.events.get('onClientReady').listen(async manager=>{
   (globalThis as any).__glurpsClient=manager.client;
   const commandsModule=await import(pathToFileURL(resolve(glurpsRoot,'dist/handlers/CommandHandler.js')).href);
   glurpsCommands=await commandsModule.loadCommands();
-  for(const name of ['ticket','ticketpanel']) glurpsCommands.delete(name);
   await import(pathToFileURL(resolve(glurpsRoot,'dist/index.js')).href);
 });
 opendiscord.events.get('afterSlashCommandsLoaded').listen(manager=>{

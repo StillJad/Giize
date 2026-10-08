@@ -239,7 +239,7 @@ const ticketButtons = () => {
             const {guild,channel,ticket} = params
 
             instance.setMode("button")
-            instance.setCustomId("od:claim-ticket")
+            instance.setCustomId("event_ticket_claim")
             instance.setColor("green")
             instance.setEmoji("👋")
             instance.setLabel(lang.getTranslation("actions.buttons.claim"))
@@ -253,7 +253,7 @@ const ticketButtons = () => {
             const {guild,channel,ticket} = params
 
             instance.setMode("button")
-            instance.setCustomId("od:unclaim-ticket")
+            instance.setCustomId("event_ticket_unclaim")
             instance.setColor("green")
             instance.setEmoji("↩️")
             instance.setLabel(lang.getTranslation("actions.buttons.unclaim"))

@@ -20,6 +20,7 @@ import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
 import { safeEdit, safeReply } from "./interactionResponses.js";
 import { ticketRenderer, type TicketPriority, type TicketType } from "./TicketRenderer.js";
+import {canClaimTicket} from "./OpenTicketBridge.js";
 import {ticketArchiveService} from "./TicketArchiveService.js";
 import {glurpsEmbed} from "../../utils/embeds.js";
 import { transcriptService } from "./TranscriptService.js";
@@ -47,130 +48,6 @@ CREATE TABLE IF NOT EXISTS ticket_audit (id INTEGER PRIMARY KEY AUTOINCREMENT, g
 export class TicketService {
   private readonly closing = new Set<string>();
   private readonly activeTickets = new Map<string, ActiveTicket>();
-  private readonly openingTickets = new Set<string>();
-
-  async open(interaction: ChatInputCommandInteraction | ModalSubmitInteraction, type: TicketType, reason: string) {
-    await interaction.deferReply({ flags: 64 });
-
-    if (!interaction.inGuild() || !interaction.guild) {
-      await safeEdit(interaction, { content: "❌ Tickets can only be opened in a server." });
-      return;
-    }
-
-    const guild = interaction.guild;
-    const userId = interaction.user.id;
-
-    if (this.hasOpenTicket(guild, userId)) {
-      await safeEdit(interaction, { content: "You already have an open ticket." });
-      return;
-    }
-
-    if (this.openingTickets.has(userId)) {
-      await safeEdit(interaction, { content: "You already have a ticket opening." });
-      return;
-    }
-
-    this.openingTickets.add(userId);
-
-    try {
-      const botMember = guild.members.me ?? (await guild.members.fetchMe());
-      const member = await guild.members.fetch({ user: userId, force: true });
-      const priority = this.determineTicketPriority(member);
-      this.logTicketPriority(member, priority);
-      const channelName = this.nextTicketChannelName(guild, interaction.user.username);
-      const openedAt = new Date();
-      const ticketNumber = this.claimNextTicketNumber();
-
-      const permissionOverwrites = [
-        {
-          id: guild.roles.everyone.id,
-          deny: [PermissionFlagsBits.ViewChannel],
-        },
-        {
-          id: userId,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-          ],
-        },
-        {
-          id: botMember.id,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ManageChannels,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.AttachFiles,
-            PermissionFlagsBits.EmbedLinks,
-          ],
-        },
-        {
-          id: config.ticketStaffRoleId,
-          allow: [
-            PermissionFlagsBits.ViewChannel,
-            PermissionFlagsBits.SendMessages,
-            PermissionFlagsBits.ReadMessageHistory,
-            PermissionFlagsBits.AttachFiles,
-            PermissionFlagsBits.EmbedLinks,
-          ],
-        },
-      ];
-
-      const ticketCategory = guild.channels.cache.get(config.ticketCategoryId);
-
-      if (!ticketCategory || ticketCategory.type !== ChannelType.GuildCategory) {
-        logger.warn(`Ticket category ${config.ticketCategoryId} was not found or is not a category. Creating ticket without a parent.`);
-      }
-
-      const ticketChannel = await guild.channels.create({
-        name: channelName,
-        type: ChannelType.GuildText,
-        parent: ticketCategory?.type === ChannelType.GuildCategory ? ticketCategory.id : undefined,
-        topic: [
-          `Ticket ${ticketNumber}`,
-          `Creator ID: ${userId}`,
-          `Ticket Type: ${type}`,
-          `Priority: ${priority}`,
-          `Opening Timestamp: ${openedAt.toISOString()}`,
-          `Opening Reason: ${reason.slice(0, 300)}`,
-        ].join(" | "),
-        permissionOverwrites,
-        reason: `Ticket opened by ${interaction.user.tag}`,
-      });
-
-      this.activeTickets.set(ticketChannel.id, {
-        ticketNumber,
-        creatorId: userId,
-        creatorTag: interaction.user.tag,
-        type,
-        priority,
-        reason,
-        openedAt,
-      });
-
-      await ticketChannel.send({
-        content: `${interaction.user} <@&${config.ticketStaffRoleId}>`,
-        embeds: [
-          ticketRenderer.renderWelcomeEmbed({
-            ticketNumber,
-            openedBy: interaction.user,
-            type,
-            priority,
-            reason,
-            openedAt,
-          }),
-        ],
-        components: [this.closeTicketRow()],
-        allowedMentions: { users:[userId],roles:config.ticketStaffRoleId?[config.ticketStaffRoleId]:[],parse:[] },
-      });
-
-      this.audit(guild.id,ticketChannel.id,userId,"Opened");
-      await safeEdit(interaction, { content: `✅ Ticket created: ${ticketChannel}` });
-    } finally {
-      this.openingTickets.delete(userId);
-    }
-  }
 
   async closeFromCommand(interaction: ChatInputCommandInteraction, reason: string) {
     await interaction.deferReply({ flags: 64 });
@@ -269,7 +146,9 @@ export class TicketService {
   }
 
   async handleManagementButton(interaction: ButtonInteraction) {
-    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {await safeReply(interaction,{content:"Administrator permission required.",flags:64});return;}
+    const claimAction=['ticket_claim','ticket_unclaim'].includes(interaction.customId);
+    const member=claimAction && interaction.guild?await interaction.guild.members.fetch(interaction.user.id):null;
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator) && !(claimAction && member && canClaimTicket(member))) {await safeReply(interaction,{content:claimAction?'Staff permission required.':'Administrator permission required.',flags:64});return;}
     if (interaction.customId.startsWith("ticket_cancel:")) {
       if (interaction.customId.split(":")[1]!==interaction.user.id) return;
       await interaction.update({content:"Cancelled.",components:[]}); return;
@@ -283,7 +162,7 @@ export class TicketService {
     if(!this.hasStandardTicketMetadata(interaction.channel) || !interaction.guildId) {await safeReply(interaction,{content:"Use this inside a support ticket.",flags:64});return;}
     const claim=sqlite.prepare("SELECT admin_id FROM ticket_claims WHERE channel_id=?").get(interaction.channelId) as {admin_id:string}|undefined;
     const release=interaction.customId==='ticket_unclaim';
-    if(release && claim?.admin_id!==interaction.user.id){await safeReply(interaction,{content:"Only the assigned administrator can release this ticket.",flags:64});return;}
+    if(release && claim?.admin_id!==interaction.user.id && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)){await safeReply(interaction,{content:"Only the assigned staff member or an administrator can release this ticket.",flags:64});return;}
     if(!release && claim){await safeReply(interaction,{content:`Already assigned to <@${claim.admin_id}>.`,flags:64});return;}
     if(release) sqlite.prepare("DELETE FROM ticket_claims WHERE channel_id=?").run(interaction.channelId);
     else sqlite.prepare("INSERT INTO ticket_claims VALUES (?,?,?,?)").run(interaction.channelId,interaction.guildId,interaction.user.id,Date.now());
@@ -425,6 +304,8 @@ export class TicketService {
 
   private closeTicketRow() {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
+      new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setStyle(ButtonStyle.Success),
+      new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("ticket_close")
         .setLabel("Close")
@@ -543,55 +424,6 @@ export class TicketService {
     return ticketTypes.find(type => type === value) ?? null;
   }
 
-  private hasOpenTicket(guild: Guild, userId: string) {
-    return (
-      [...this.activeTickets.values()].some(ticket => ticket.creatorId === userId) ||
-      this.ticketChannels(guild).some(channel => Boolean(channel.topic?.includes(`Creator ID: ${userId}`)))
-    );
-  }
-
-  private ticketChannels(guild: Guild) {
-    const textChannels = guild.channels.cache.filter(channel => channel.type === ChannelType.GuildText);
-
-    if (!config.ticketCategoryId) {
-      return this.sortTicketChannels([...textChannels.values()]);
-    }
-
-    const categoryChannels = textChannels.filter(channel => channel.parentId === config.ticketCategoryId);
-    return this.sortTicketChannels([...(categoryChannels.size > 0 ? categoryChannels : textChannels).values()]);
-  }
-
-  private determineTicketPriority(member: GuildMember): TicketPriority {
-    if (config.diamondSupporterRoleId && member.roles.cache.has(config.diamondSupporterRoleId)) {
-      return "Diamond";
-    }
-
-    if (config.ironSupporterRoleId && member.roles.cache.has(config.ironSupporterRoleId)) {
-      return "Iron";
-    }
-
-    if (config.dirtSupporterRoleId && member.roles.cache.has(config.dirtSupporterRoleId)) {
-      return "Dirt";
-    }
-
-    return "Normal";
-  }
-
-  private logTicketPriority(member: GuildMember, priority: TicketPriority) {
-    logger.info(`Ticket priority: member=${member.id} priority=${priority}`);
-  }
-
-  private sortTicketChannels(channels: TextChannel[]) {
-    return channels.sort((left, right) => {
-      const priorityDifference = this.priorityRank(this.priorityFromTopic(left.topic)) -
-        this.priorityRank(this.priorityFromTopic(right.topic));
-
-      if (priorityDifference !== 0) return priorityDifference;
-
-      return this.openedAtFromTopic(left.topic) - this.openedAtFromTopic(right.topic);
-    });
-  }
-
   private priorityFromTopic(topic: string | null): TicketPriority {
     const match = topic?.match(/(?:^|\|\s*)Priority:\s*(Diamond|Iron|Dirt|Normal)/i);
     const value = match?.[1]?.toLowerCase();
@@ -600,55 +432,6 @@ export class TicketService {
     if (value === "iron") return "Iron";
     if (value === "dirt") return "Dirt";
     return "Normal";
-  }
-
-  private priorityRank(priority: TicketPriority) {
-    switch (priority) {
-      case "Diamond":
-        return 0;
-      case "Iron":
-        return 1;
-      case "Dirt":
-        return 2;
-      case "Normal":
-        return 3;
-    }
-  }
-
-  private openedAtFromTopic(topic: string | null) {
-    const match = topic?.match(/Opening Timestamp:\s*([^|]+)/);
-    const timestamp = match?.[1] ? Date.parse(match[1].trim()) : Number.NaN;
-    return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
-  }
-
-  private claimNextTicketNumber() {
-    const claimNumber = sqlite.transaction(() => {
-      const row = sqlite
-        .prepare("SELECT next_ticket_number AS nextTicketNumber FROM ticket_counter WHERE id = 1")
-        .get() as { nextTicketNumber: number } | undefined;
-      const nextTicketNumber = row?.nextTicketNumber ?? 1;
-
-      sqlite
-        .prepare("INSERT OR REPLACE INTO ticket_counter (id, next_ticket_number) VALUES (1, ?)")
-        .run(nextTicketNumber + 1);
-
-      return nextTicketNumber;
-    });
-
-    return `#${String(claimNumber()).padStart(4, "0")}`;
-  }
-
-  private nextTicketChannelName(guild: Guild, username: string) {
-    const baseName = `ticket-${this.slug(username)}`.slice(0, 80) || "ticket-user";
-    let candidate = baseName;
-    let suffix = 2;
-
-    while (guild.channels.cache.some(channel => channel.name === candidate)) {
-      candidate = `${baseName}-${suffix}`;
-      suffix += 1;
-    }
-
-    return candidate;
   }
 
   private slug(value: string) {

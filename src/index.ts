@@ -10,6 +10,7 @@ import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";
 import "./handlers/SelectMenuHandler.js";
 import "./handlers/WelcomeHandler.js";
+import {openTicketBridge} from "./services/tickets/OpenTicketBridge.js";
 import {levelRewardService} from "./services/community/LevelRewardService.js";
 import { levelService } from "./services/community/LevelService.js";
 import { autoModService } from "./services/automod/AutoModService.js";
@@ -21,7 +22,6 @@ const missing = required.filter(key => !process.env[key]?.trim());
 if (missing.length) throw new Error(`Missing configuration: ${missing.join(", ")}. Fill in .env before starting.`);
 
 const commands = await loadCommands();
-if ((globalThis as { __glurpsClient?: unknown }).__glurpsClient) { commands.delete("ticket"); commands.delete("ticketpanel"); }
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
@@ -52,7 +52,7 @@ logger.info("✓ Loaded AutoMod");
 const onReady = (ready: typeof client) => {
   logger.info(`✓ Logged in as ${ready.user?.tag ?? "Event Bot"}`);
   autoModService.initializeForGuild(config.guildId);
-  void ready.guilds.fetch(config.guildId).then(async guild => {await levelService.prepareReward(guild);await levelRewardService.prepare(guild);const members=sqlite.prepare('SELECT user_id,xp FROM member_xp WHERE guild_id=? AND xp>=12750').all(guild.id) as {user_id:string;xp:number}[];for(const member of members){try{await levelService.syncReward(guild,member.user_id);}catch(error){logger.warn('Existing level reward sync failed.',error);}}}).catch(error => logger.warn("Level reward setup needs attention.", error));
+  void ready.guilds.fetch(config.guildId).then(async guild => {await levelService.prepareReward(guild);await levelRewardService.prepare(guild);await openTicketBridge.prepareAccess(guild);const members=sqlite.prepare('SELECT user_id,xp FROM member_xp WHERE guild_id=? AND xp>=12750').all(guild.id) as {user_id:string;xp:number}[];for(const member of members){try{await levelService.syncReward(guild,member.user_id);}catch(error){logger.warn('Existing level reward sync failed.',error);}}}).catch(error => logger.warn("Level reward setup needs attention.", error));
   reminderService.start(client);
   levelService.start(client);
 };

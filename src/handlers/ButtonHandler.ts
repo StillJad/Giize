@@ -1,3 +1,4 @@
+import {openTicketBridge} from "../services/tickets/OpenTicketBridge.js";
 import {colorPickerService} from "../services/community/ColorPickerService.js";
 import {ticketArchiveService} from '../services/tickets/TicketArchiveService.js';
 import { Events, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
@@ -48,6 +49,7 @@ function decodeVerificationUsername(value: string) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
+    if(interaction.customId==='event_ticket_claim' || interaction.customId==='event_ticket_unclaim'){await openTicketBridge.claim(interaction);return;}
     if(interaction.customId.startsWith("color_")){await colorPickerService.button(interaction);return;}
     if(interaction.customId.startsWith("archive_")){await ticketArchiveService.button(interaction);return;}
     if (interaction.customId === "account_verify") {
