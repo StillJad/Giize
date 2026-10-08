@@ -29,6 +29,7 @@ async function shutdown() {
   const timeout = setTimeout(() => process.exit(1), 10_000);
   timeout.unref();
   reminderService.stop();
+  levelService.stop();
   try {
     client.destroy();
     sqlite.close();
@@ -52,6 +53,7 @@ const onReady = (ready: typeof client) => {
   autoModService.initializeForGuild(config.guildId);
   void ready.guilds.fetch(config.guildId).then(guild => levelService.prepareReward(guild)).catch(error => logger.warn("Level reward setup needs attention.", error));
   reminderService.start(client);
+  levelService.start(client);
 };
 if (client.isReady()) onReady(client);
 else client.once(Events.ClientReady, onReady);
