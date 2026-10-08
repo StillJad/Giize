@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';import {mkdtempSync,rmSync} from 'node:fs';import {tmpdir} from 'node:os';import {join} from 'node:path';import {Collection,ChannelType,EmbedBuilder,PermissionsBitField,PermissionFlagsBits} from 'discord.js';
 const dir=mkdtempSync(join(tmpdir(),'event-archive-'));process.env.DATABASE_PATH=join(dir,'test.db');const {sqlite}=await import('../dist/database/database.js');const {ticketArchiveService:service}=await import('../dist/services/tickets/TicketArchiveService.js');
 try {
- sqlite.exec('CREATE TABLE support_ticket_records(channel_id TEXT PRIMARY KEY,reason TEXT)');sqlite.prepare('INSERT INTO support_ticket_records VALUES (?,?)').run('ticket','Old reason');
+ sqlite.prepare('INSERT INTO support_ticket_records(channel_id,number,reason) VALUES (?,?,?)').run('ticket',1,'Old reason');
  let creations=0,overwrites;const messages=new Map();let sent=0;
  const storage={id:'storage',type:ChannelType.GuildText,messages:{fetch:async id=>messages.get(id)},send:async data=>{const message={id:`stored-${++sent}`,attachments:new Collection([['file',{url:'https://example.invalid/file.txt'}]]),edit:async()=>message};messages.set(message.id,message);return message;}};
  const guild={id:'guild',roles:{everyone:{id:'everyone'}},client:{user:{id:'bot'}},channels:{fetch:async()=>storage,create:async data=>{creations++;overwrites=data.permissionOverwrites;return storage;}}};

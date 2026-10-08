@@ -1,7 +1,7 @@
 import {ActionRowBuilder,ButtonBuilder,ButtonStyle,ChannelType,PermissionFlagsBits,ModalBuilder,TextInputBuilder,TextInputStyle,EmbedBuilder,type Guild,type Client,type ButtonInteraction,type ModalSubmitInteraction} from 'discord.js';
 import {sqlite} from '../../database/database.js';
 import {logger} from '../../utils/logger.js';
-sqlite.exec(`CREATE TABLE IF NOT EXISTS ticket_storage_settings(guild_id TEXT PRIMARY KEY,channel_id TEXT NOT NULL);CREATE TABLE IF NOT EXISTS ticket_archives(ticket_id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,creator_id TEXT,storage_channel TEXT NOT NULL,storage_message TEXT NOT NULL,summary TEXT,log_channel TEXT,log_message TEXT,dm_channel TEXT,dm_message TEXT);`);
+sqlite.exec(`CREATE TABLE IF NOT EXISTS support_ticket_records(channel_id TEXT PRIMARY KEY,number INTEGER NOT NULL UNIQUE,closed_by TEXT,closed_at INTEGER,reason TEXT);CREATE TABLE IF NOT EXISTS ticket_storage_settings(guild_id TEXT PRIMARY KEY,channel_id TEXT NOT NULL);CREATE TABLE IF NOT EXISTS ticket_archives(ticket_id TEXT PRIMARY KEY,guild_id TEXT NOT NULL,creator_id TEXT,storage_channel TEXT NOT NULL,storage_message TEXT NOT NULL,summary TEXT,log_channel TEXT,log_message TEXT,dm_channel TEXT,dm_message TEXT);`);
 export class TicketArchiveService {
  row(id:string){return sqlite.prepare('SELECT * FROM ticket_archives WHERE ticket_id=?').get(id) as any;}
  async store(id:string,guild:Guild,contents:string){

@@ -20,6 +20,8 @@ import { sqlite } from "../../database/database.js";
 import { logger } from "../../utils/logger.js";
 import { safeEdit, safeReply } from "./interactionResponses.js";
 import { ticketRenderer, type TicketPriority, type TicketType } from "./TicketRenderer.js";
+import {ticketArchiveService} from "./TicketArchiveService.js";
+import {glurpsEmbed} from "../../utils/embeds.js";
 import { transcriptService } from "./TranscriptService.js";
 
 type ActiveTicket = {
@@ -104,7 +106,7 @@ export class TicketService {
           ],
         },
         {
-          id: config.staffRoleId,
+          id: config.ticketStaffRoleId,
           allow: [
             PermissionFlagsBits.ViewChannel,
             PermissionFlagsBits.SendMessages,
@@ -394,47 +396,22 @@ export class TicketService {
       openingReason: ticket.reason,
       closingReason,
     };
-    const log = {
-      ticketNumber: ticket.ticketNumber,
-      ticketChannel: `${channel.name} (${channel.id})`,
-      openedBy: `<@${ticket.creatorId}>`,
-      creatorId: ticket.creatorId,
-      closedBy: interaction.user,
-      type: ticket.type,
-      priority: ticket.priority,
-      openingReason: ticket.reason,
-      closingReason,
-      openedAt: ticket.openedAt,
-      closedAt,
-      duration,
-    };
     let transcript = transcriptService.createFallbackText(transcriptMetadata);
 
     try {
       transcript = await transcriptService.createText(channel, transcriptMetadata);
     } catch (error) {
-      logger.warn("Failed to generate ticket transcript. Continuing close flow.", error);
+      logger.warn("Failed to generate ticket transcript; keeping ticket open.", error);
+      await safeEdit(interaction,{content:"Could not create the transcript. The ticket is still open; please try closing it again."});return;
     }
 
-    let transcriptFile:
-      | {
-          directory: string;
-          filePath: string;
-          filename: string;
-        }
-      | undefined;
-
-    try {
-      try { transcriptFile = await transcriptService.createHtmlFile(channel, ticket.ticketNumber); }
-      catch (error) { logger.warn("HTML transcript failed; saving text transcript.",error); transcriptFile = await transcriptService.createTempFile(transcript, ticket.ticketNumber); }
-    } catch (error) {
-      logger.warn("Failed to save ticket transcript file. Continuing close flow.", error);
-    }
-
-    await this.sendTicketLog(interaction.guild, log, transcriptFile);
-    await this.sendCreatorDm(interaction, ticket.creatorId, log, transcriptFile);
-
-    this.audit(interaction.guild.id,channel.id,interaction.user.id,`Closed: ${closingReason}; transcript: ${transcriptFile?.filename ?? "unavailable"}`);
+    await ticketArchiveService.store(channel.id,interaction.guild,transcript);
+    const embed=glurpsEmbed().setColor(0x57f287).setAuthor({name:interaction.guild.name,iconURL:interaction.guild.iconURL()??undefined}).setTitle('Ticket Closed').addFields(
+      {name:'Ticket ID',value:ticket.ticketNumber,inline:true},{name:'Opened By',value:`<@${ticket.creatorId}>`,inline:true},{name:'Closed By',value:`<@${interaction.user.id}>`,inline:true},
+      {name:'Open Time',value:`<t:${Math.floor(ticket.openedAt.getTime()/1000)}:F>`,inline:true},{name:'Duration',value:duration,inline:true},{name:'Reason',value:closingReason.slice(0,1024)}).setFooter({text:'Event Bot'}).setTimestamp(closedAt);
+    sqlite.prepare('INSERT OR IGNORE INTO support_ticket_records(channel_id,number,closed_by,closed_at,reason) VALUES (?,?,?,?,?)').run(channel.id,Number(ticket.ticketNumber.replace(/\D/g,'')),interaction.user.id,closedAt.getTime(),closingReason);
+    await ticketArchiveService.deliver(channel.id,interaction.client,embed,ticket.creatorId,config.ticketLogsChannelId);
+    this.audit(interaction.guild.id,channel.id,interaction.user.id,`Closed: ${closingReason}; transcript stored in Discord`);
     sqlite.prepare("DELETE FROM ticket_claims WHERE channel_id=?").run(channel.id);
 
     this.activeTickets.delete(channel.id);
@@ -448,8 +425,6 @@ export class TicketService {
 
   private closeTicketRow() {
     return new ActionRowBuilder<ButtonBuilder>().addComponents(
-      new ButtonBuilder().setCustomId("ticket_claim").setLabel("Claim").setEmoji("👋").setStyle(ButtonStyle.Success),
-      new ButtonBuilder().setCustomId("ticket_unclaim").setLabel("Release").setEmoji("↩️").setStyle(ButtonStyle.Secondary),
       new ButtonBuilder()
         .setCustomId("ticket_close")
         .setLabel("Close")
@@ -566,90 +541,6 @@ export class TicketService {
   private ticketTypeFromTopic(value: string | undefined): TicketType | null {
     const ticketTypes: TicketType[] = ["Support", "Report", "Player Report", "Appeal", "Help", "Builder", "Media"];
     return ticketTypes.find(type => type === value) ?? null;
-  }
-
-  private async sendTicketLog(
-    guild: Guild,
-    log: Parameters<typeof ticketRenderer.renderLogEmbed>[0],
-    transcriptFile: { filePath: string; filename: string } | undefined
-  ) {
-    try {
-      const channel = await guild.channels.fetch(config.ticketLogsChannelId).catch(error => {
-        logger.warn("Failed to fetch ticket logs channel. Skipping logs.", error);
-        return null;
-      });
-
-      if (!channel) {
-        logger.warn(`Ticket logs channel ${config.ticketLogsChannelId} was not found. Skipping logs.`);
-        return;
-      }
-
-      if (!channel.isTextBased() || !("send" in channel)) {
-        logger.warn(`Ticket logs channel ${config.ticketLogsChannelId} is not text based. Skipping logs.`);
-        return;
-      }
-
-      const botMember = guild.members.me ?? (await guild.members.fetchMe().catch(() => null));
-
-      if (!botMember) {
-        logger.warn("Could not resolve bot member. Skipping ticket logs.");
-        return;
-      }
-
-      const permissions = channel.permissionsFor(botMember);
-      const permissionChecks = [
-        ["View Channel", PermissionFlagsBits.ViewChannel],
-        ["Send Messages", PermissionFlagsBits.SendMessages],
-        ["Attach Files", PermissionFlagsBits.AttachFiles],
-        ["Embed Links", PermissionFlagsBits.EmbedLinks],
-      ] as const;
-
-      const missingPermissions = permissionChecks
-        .filter(([, permission]) => !permissions?.has(permission))
-        .map(([label]) => label);
-
-      if (missingPermissions.length > 0) {
-        for (const permission of missingPermissions) {
-          logger.warn(`Missing ticket logs permission: ${permission}`);
-        }
-        return;
-      }
-
-      if (!transcriptFile) {
-        logger.warn("Transcript file was not available. Skipping ticket logs.");
-        return;
-      }
-
-      await channel.send({
-        embeds: [ticketRenderer.renderLogEmbed(log)],
-        files: [transcriptService.createAttachment(transcriptFile.filePath, transcriptFile.filename)],
-      });
-    } catch (error) {
-      logger.warn("Failed to send ticket logs. Continuing close flow.", error);
-    }
-  }
-
-  private async sendCreatorDm(
-    interaction: ChatInputCommandInteraction | ModalSubmitInteraction | ButtonInteraction,
-    creatorId: string,
-    log: Parameters<typeof ticketRenderer.renderClosedDmEmbed>[0],
-    transcriptFile: { filePath: string; filename: string } | undefined
-  ) {
-    try {
-      if (!transcriptFile) {
-        logger.warn("Transcript file was not available. Skipping ticket creator DM.");
-        return;
-      }
-
-      const creator = await interaction.client.users.fetch(creatorId);
-
-      await creator.send({
-        embeds: [ticketRenderer.renderClosedDmEmbed(log)],
-        files: [transcriptService.createAttachment(transcriptFile.filePath, transcriptFile.filename)],
-      });
-    } catch (error) {
-      logger.warn("Failed to DM ticket creator. Continuing close flow.", error);
-    }
   }
 
   private hasOpenTicket(guild: Guild, userId: string) {

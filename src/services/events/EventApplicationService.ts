@@ -378,7 +378,7 @@ export class EventApplicationService {
           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
         },
         {
-          id: config.staffRoleId,
+          id: config.ticketStaffRoleId,
           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks],
         },
         {
@@ -393,6 +393,8 @@ export class EventApplicationService {
       .run(channel.id, application.id);
 
     await channel.send({
+      content: `<@&${config.ticketStaffRoleId}>`,
+      allowedMentions: {roles:[config.ticketStaffRoleId],parse:[]},
       embeds: [eventApplicationRenderer.renderTicketEmbed(event, application, autoAccepted ? "automatic" : "manual")],
       components: eventApplicationRenderer.renderReviewComponents(application.id, false),
     });

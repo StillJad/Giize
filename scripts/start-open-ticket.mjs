@@ -21,7 +21,7 @@ export function configureEngine(env=process.env) {
  const base=read('options.jsonc').find(option=>option.type==='ticket');
  const options=[['support','Support','🎫'],['report','Player Report','🚨'],['appeal','Appeal','📝']].map(([id,name,emoji])=>{
   const option=structuredClone(base);option.id=id;option.name=name;option.description=`Open a private ${name.toLowerCase()} ticket.`;
-  option.button={emoji,label:name,color:'blue'};option.questions=['issue'];option.ticketAdmins=[];option.readonlyAdmins=[];
+  option.button={emoji,label:name,color:'blue'};option.questions=['issue'];option.ticketAdmins=[env.TICKET_STAFF_ROLE_ID??'1557371367241027705'];option.readonlyAdmins=[];
   option.channel.category=env.TICKET_CATEGORY_ID??'';option.channel.prefix='ticket-';option.channel.topic=`Event ${name}`;
   option.dmMessage.enabled=false;option.ticketMessage.embed.title=`${name} Ticket`;option.ticketMessage.embed.description='Describe what happened and include any useful evidence. An administrator will help you here.';
   option.ticketMessage.embed.fields=[];option.ticketMessage.embed.customColor='#5865F2';option.ticketMessage.ping={'@here':false,'@everyone':false,custom:[env.TICKET_STAFF_ROLE_ID??'1557371367241027705']};
