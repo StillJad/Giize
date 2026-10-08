@@ -1,3 +1,4 @@
+import {colorPickerService} from "../services/community/ColorPickerService.js";
 import {ticketArchiveService} from '../services/tickets/TicketArchiveService.js';
 import { Events } from "discord.js";
 import { beginVerification } from "../commands/verification/verify.js";
@@ -10,6 +11,7 @@ import { logger } from "../utils/logger.js";
 client.on(Events.InteractionCreate, async interaction => {
   try {
     if (!interaction.isModalSubmit()) return;
+    if(interaction.customId.startsWith("color_submit:")){await colorPickerService.modal(interaction);return;}
     if(interaction.customId.startsWith("archive_reason_submit:")){await ticketArchiveService.modal(interaction);return;}
     if(interaction.customId==="account_verify_submit") {
       const platform=interaction.fields.getTextInputValue("platform").trim().toLowerCase();

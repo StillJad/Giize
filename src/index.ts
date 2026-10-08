@@ -10,6 +10,7 @@ import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";
 import "./handlers/SelectMenuHandler.js";
 import "./handlers/WelcomeHandler.js";
+import {levelRewardService} from "./services/community/LevelRewardService.js";
 import { levelService } from "./services/community/LevelService.js";
 import { autoModService } from "./services/automod/AutoModService.js";
 import { reminderService } from "./services/events/ReminderService.js";
@@ -51,7 +52,7 @@ logger.info("✓ Loaded AutoMod");
 const onReady = (ready: typeof client) => {
   logger.info(`✓ Logged in as ${ready.user?.tag ?? "Event Bot"}`);
   autoModService.initializeForGuild(config.guildId);
-  void ready.guilds.fetch(config.guildId).then(guild => levelService.prepareReward(guild)).catch(error => logger.warn("Level reward setup needs attention.", error));
+  void ready.guilds.fetch(config.guildId).then(async guild => {await levelService.prepareReward(guild);await levelRewardService.prepare(guild);const members=sqlite.prepare('SELECT user_id,xp FROM member_xp WHERE guild_id=? AND xp>=12750').all(guild.id) as {user_id:string;xp:number}[];for(const member of members){try{await levelService.syncReward(guild,member.user_id);}catch(error){logger.warn('Existing level reward sync failed.',error);}}}).catch(error => logger.warn("Level reward setup needs attention.", error));
   reminderService.start(client);
   levelService.start(client);
 };

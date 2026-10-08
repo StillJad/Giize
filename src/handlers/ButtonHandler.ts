@@ -1,3 +1,4 @@
+import {colorPickerService} from "../services/community/ColorPickerService.js";
 import {ticketArchiveService} from '../services/tickets/TicketArchiveService.js';
 import { Events, ModalBuilder, ActionRowBuilder, TextInputBuilder, TextInputStyle, GuildMember, PermissionFlagsBits, type ButtonInteraction } from "discord.js";
 import { levelService } from "../services/community/LevelService.js";
@@ -47,6 +48,7 @@ function decodeVerificationUsername(value: string) {
 client.on(Events.InteractionCreate, async (interaction) => {
   try {
     if (!interaction.isButton()) return;
+    if(interaction.customId.startsWith("color_")){await colorPickerService.button(interaction);return;}
     if(interaction.customId.startsWith("archive_")){await ticketArchiveService.button(interaction);return;}
     if (interaction.customId === "account_verify") {
       await interaction.showModal(new ModalBuilder().setCustomId("account_verify_submit").setTitle("Minecraft Verification").addComponents(
