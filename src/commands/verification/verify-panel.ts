@@ -1,0 +1,5 @@
+import {SlashCommandBuilder,ChannelType,ActionRowBuilder,ButtonBuilder,ButtonStyle,type TextChannel} from 'discord.js';
+import {glurpsEmbed} from '../../utils/embeds.js';
+import type {Command} from '../../types/Command.js';
+export const command:Command={data:new SlashCommandBuilder().setName('verify-panel').setDescription('Post a public Minecraft verification button.').addChannelOption(o=>o.setName('channel').setDescription('Verification channel.').setRequired(true).addChannelTypes(ChannelType.GuildText)),
+async execute(i){await i.deferReply({flags:64});await (i.options.getChannel('channel',true) as TextChannel).send({embeds:[glurpsEmbed().setTitle('Minecraft Verification').setDescription('Link your Java username or Bedrock gamertag before joining an event.')],components:[new ActionRowBuilder<ButtonBuilder>().addComponents(new ButtonBuilder().setCustomId('account_verify').setLabel('Verify Minecraft Account').setStyle(ButtonStyle.Primary))]});await i.editReply('Verification panel posted.');}};

@@ -4,7 +4,7 @@ import {
   ButtonStyle,
   type APIEmbedField,
 } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import { applicationMethodLabel } from "./EventApplicationSettings.js";
 
 export type EventStatus = "scheduled" | "ended";
@@ -75,16 +75,16 @@ export class EventRenderer {
       { name: `❌ Can't Go (${counts.cant})`, value: `${counts.cant}`, inline: true },
       {
         name: "📝 Applications",
-        value: `${applicationMethodLabel(event.googleFormsEnabled)} • Verification ${event.verifyRequired ? "required" : "optional"}`,
+        value: `${applicationMethodLabel(event.googleFormsEnabled)}`,
         inline: false,
       }
     );
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle(event.title)
       .setDescription(event.description)
       .addFields(fields)
-      .setFooter({ text: event.status === "ended" ? "Event ended" : "Glurps Bot" })
+      .setFooter({ text: event.status === "ended" ? "Event ended" : "Event Bot" })
       .setTimestamp(new Date(event.createdAt));
   }
 
@@ -99,7 +99,7 @@ export class EventRenderer {
         .setCustomId(`event_apply:${event.id}`)
         .setStyle(ButtonStyle.Success)
         .setDisabled(true);
-    } else if (event.googleFormsEnabled && !event.verifyRequired && event.googleFormUrl) {
+    } else if (event.googleFormsEnabled && event.googleFormUrl) {
       applyButton
         .setURL(event.googleFormUrl)
         .setStyle(ButtonStyle.Link);
@@ -140,7 +140,7 @@ export class EventRenderer {
       });
     }
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Participants")
       .setDescription([
         `Event ID: ${event.eventNumber}`,
@@ -166,7 +166,6 @@ export class EventRenderer {
       { name: "Ended At", value: `<t:${Math.floor(endedAt.getTime() / 1000)}:F>`, inline: true },
       { name: "Duration", value: this.hasDuration(event) ? duration : "Unknown", inline: true },
       { name: "Application Method", value: applicationMethodLabel(event.googleFormsEnabled), inline: true },
-      { name: "Verify Required", value: event.verifyRequired ? "Yes" : "No", inline: true },
       { name: "Going count", value: `${counts.going}`, inline: true },
       { name: "Can't Go count", value: `${counts.cant}`, inline: true },
       this.logParticipantField("Going", participants.goingNames ?? participants.going),
@@ -181,7 +180,7 @@ export class EventRenderer {
       );
     }
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Event Ended")
       .addFields(fields);
   }
@@ -194,20 +193,19 @@ export class EventRenderer {
         `Status: ${event.status === "scheduled" ? "Active" : "Ended"}`,
         `Starts: ${this.hasDate(event) ? `<t:${Math.floor(event.startTimestamp / 1000)}:F>` : "TBA"}`,
         `Applications: ${applicationMethodLabel(event.googleFormsEnabled)}`,
-        `Verification required: ${event.verifyRequired ? "Yes" : "No"}`,
         `Channel: <#${event.channelId}>`,
       ].join("\n"),
       inline: false,
     }));
 
-    return giizeEmbed()
-      .setTitle("✨ Glurps Events")
+    return glurpsEmbed()
+      .setTitle("✨ Event Bot")
       .setDescription(events.length > 0 ? "Upcoming and recent events." : "No events found.")
       .addFields(fields.slice(0, 25));
   }
 
   renderReminderEmbed(event: EventRecord, label: string) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle(`⏰ Event Reminder: ${event.title}`)
       .setDescription(`${label} until this event starts.`)
       .addFields(

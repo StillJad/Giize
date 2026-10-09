@@ -1,10 +1,7 @@
 import {
-  AttachmentBuilder,
   type Message,
   type TextBasedChannel,
 } from "discord.js";
-import { mkdir, rm, writeFile } from "node:fs/promises";
-import path from "node:path";
 import type { TicketPriority, TicketType } from "./TicketRenderer.js";
 
 export type TranscriptMetadata = {
@@ -29,31 +26,6 @@ export class TranscriptService {
   async createText(channel: TextBasedChannel, metadata: TranscriptMetadata) {
     const messages = await this.fetchMessages(channel);
     return this.renderText(messages.reverse(), metadata);
-  }
-
-  async createTempFile(transcript: string, ticketNumber: string) {
-    const baseFilename = `ticket-${ticketNumber.replace("#", "")}`;
-    const directory = path.join(process.cwd(), "data", "transcripts", `${Date.now()}-${baseFilename}`);
-    const filename = `${baseFilename}.txt`;
-    const filePath = path.join(directory, filename);
-
-    await mkdir(directory, { recursive: true });
-    await writeFile(filePath, transcript, "utf8");
-
-    return {
-      directory,
-      filePath,
-      filename,
-    };
-  }
-
-  createAttachment(filePath: string, filename: string) {
-    return new AttachmentBuilder(filePath, { name: filename });
-  }
-
-  async removeTempFile(file: { directory: string; filePath: string }) {
-    await rm(file.filePath, { force: true }).catch(() => {});
-    await rm(file.directory, { force: true, recursive: true }).catch(() => {});
   }
 
   createFallbackText(metadata: TranscriptMetadata) {

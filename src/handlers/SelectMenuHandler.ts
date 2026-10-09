@@ -1,3 +1,4 @@
+import {colorPickerService} from "../services/community/ColorPickerService.js";
 import { Events } from "discord.js";
 import { client } from "../client.js";
 import { safeReply } from "../services/tickets/interactionResponses.js";
@@ -7,6 +8,7 @@ import { logger } from "../utils/logger.js";
 client.on(Events.InteractionCreate, async interaction => {
   try {
     if (!interaction.isStringSelectMenu()) return;
+    if(interaction.customId.startsWith("color_preset:")){await colorPickerService.select(interaction);return;}
 
     if (interaction.customId === "ticket_panel_select") {
       await ticketRouter.handleTicketPanelSelect(interaction);

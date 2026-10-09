@@ -3,13 +3,13 @@ import {
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 
 export class PurgeRenderer {
   renderPreview(matchCount: number, filters: string[], requiresExtraConfirmation: boolean) {
     return {
       embeds: [
-        giizeEmbed()
+        glurpsEmbed()
           .setTitle("Purge Preview")
           .setDescription([
             "About to delete:",
@@ -42,7 +42,7 @@ export class PurgeRenderer {
   renderExtraConfirmation(filters: string[]) {
     return {
       embeds: [
-        giizeEmbed()
+        glurpsEmbed()
           .setTitle("Confirm Large Purge")
           .setDescription([
             "This purge targets 250 or more messages.",

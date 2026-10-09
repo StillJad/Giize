@@ -2,7 +2,9 @@ FROM node:22-alpine
 
 WORKDIR /app
 
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 py3-pip ffmpeg make g++
+
+RUN python3 -m pip install --no-cache-dir --break-system-packages "yt-dlp[default]==2026.8.19"
 
 COPY package*.json ./
 

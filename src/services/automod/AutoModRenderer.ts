@@ -1,10 +1,10 @@
 import type { APIEmbedField } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import type { AutoModConfig, AutoModLogData } from "./AutoModService.js";
 
 export class AutoModRenderer {
   renderStatus(config: AutoModConfig, bannedWordCount: number, allowedDomainCount: number) {
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("AutoMod Status")
       .addFields(
         { name: "Enabled", value: config.enabled ? "Yes" : "No", inline: true },
@@ -38,7 +38,7 @@ export class AutoModRenderer {
       fields.push({ name: "Attachments", value: this.truncate(data.attachments), inline: false });
     }
 
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("AutoMod Action")
       .addFields(fields);
   }

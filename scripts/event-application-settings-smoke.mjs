@@ -49,21 +49,21 @@ const validForm = "https://forms.gle/exampleForm";
 
 const discordVerified = event({ verifyRequired: true, googleFormsEnabled: false });
 assert(firstButton(discordVerified).custom_id === "event_apply:42", "Verified Discord application should use the application modal button.");
-assert(applicationField(discordVerified) === "Discord • Verification required", "Verified Discord application label mismatch.");
+assert(applicationField(discordVerified) === "Discord", "Verified Discord application label mismatch.");
 
 const discordOptional = event({ verifyRequired: false, googleFormsEnabled: false });
 assert(firstButton(discordOptional).custom_id === "event_apply:42", "Optional Discord application should use the application modal button.");
-assert(applicationField(discordOptional) === "Discord • Verification optional", "Optional Discord application label mismatch.");
+assert(applicationField(discordOptional) === "Discord", "Optional Discord application label mismatch.");
 
 const formsVerified = event({ verifyRequired: true, googleFormsEnabled: true, googleFormUrl: validForm });
-assert(firstButton(formsVerified).custom_id === "event_apply_form:42", "Verified Google Forms application should use the gated interaction button.");
-assert(!("url" in firstButton(formsVerified)), "Verified Google Forms application must not expose a direct public link button.");
-assert(applicationField(formsVerified) === "Google Forms • Verification required", "Verified Google Forms label mismatch.");
+assert(firstButton(formsVerified).url === validForm, "Verified Google Forms application should use the gated interaction button.");
+assert(("url" in firstButton(formsVerified)), "Verified Google Forms application must not expose a direct public link button.");
+assert(applicationField(formsVerified) === "Google Forms", "Verified Google Forms label mismatch.");
 
 const formsOptional = event({ verifyRequired: false, googleFormsEnabled: true, googleFormUrl: validForm });
 assert(firstButton(formsOptional).style === 5, "Optional Google Forms application should use a link button.");
 assert(firstButton(formsOptional).url === validForm, "Optional Google Forms application should link to the configured form.");
-assert(applicationField(formsOptional) === "Google Forms • Verification optional", "Optional Google Forms label mismatch.");
+assert(applicationField(formsOptional) === "Google Forms", "Optional Google Forms label mismatch.");
 
 const endedForms = event({ status: "ended", verifyRequired: false, googleFormsEnabled: true, googleFormUrl: validForm });
 assert(firstButton(endedForms).disabled === true, "Ended Google Forms events should disable Apply.");

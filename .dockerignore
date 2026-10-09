@@ -1,8 +1,13 @@
 node_modules
-apps/dashboard/node_modules
-apps/dashboard/.next
+**/node_modules
 dist
+**/dist
 .git
 .env
-data/*.log
-npm-debug.log
+.env.*
+!.env.example
+/data
+vendor/open-ticket/database
+vendor/open-ticket/devdatabase
+**/*.log
+**/otdebug.txt

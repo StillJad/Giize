@@ -294,6 +294,7 @@ export class EventService {
 
     await this.removeTrackedGoingRoles(interaction.guild, event.id);
     sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
+    await this.cleanupEndedApplications(interaction.guild, event.id);
     const updated = this.getById(event.id);
     if (updated) {
       await this.updateEventMessage(interaction.client, updated);
@@ -391,6 +392,7 @@ export class EventService {
 
     const participants = this.getParticipants(event.id);
 
+    if (shouldExport && !interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {await safeEdit(interaction,{content:"Administrator permission is required to export rosters."});return;}
     if (shouldExport) {
       const exportFile = await this.createParticipantExportFile(event, participants);
 
@@ -428,6 +430,23 @@ export class EventService {
     await this.updateEventMessage(client, event);
   }
 
+  async removeApplicant(guild: Guild, client: Client, event: EventRecord, userId: string) {
+    sqlite.prepare("DELETE FROM event_participants WHERE event_id = ? AND user_id = ?").run(event.id, userId);
+    const assignments = sqlite.prepare("SELECT role_id FROM event_role_assignments WHERE event_id = ? AND user_id = ?").all(event.id, userId) as { role_id: string }[];
+    const member = await guild.members.fetch(userId).catch(() => null);
+    for (const assignment of assignments) {
+      const other = sqlite.prepare("SELECT 1 FROM event_role_assignments WHERE user_id = ? AND role_id = ? AND event_id != ?").get(userId, assignment.role_id, event.id);
+      if (!other) await member?.roles.remove(assignment.role_id, "Event application decision changed.").catch(error => logger.warn("Failed to remove Going role.", error));
+    }
+    sqlite.prepare("DELETE FROM event_role_assignments WHERE event_id = ? AND user_id = ?").run(event.id, userId);
+    await this.updateEventMessage(client, event);
+  }
+
+  private async cleanupEndedApplications(guild: Guild, eventId: number) {
+    const applications = sqlite.prepare("SELECT id, application_channel_id FROM event_applications WHERE event_id = ?").all(eventId) as ApplicationCleanupRow[];
+    await this.deleteApplicationChannels(guild, applications);
+  }
+
   async deleteByNumber(guild: Guild, client: Client, eventNumber: number) {
     const event = this.getByNumber(guild.id, eventNumber);
     if (!event) return false;
@@ -442,6 +461,7 @@ export class EventService {
 
     await this.removeTrackedGoingRoles(guild, event.id);
     sqlite.prepare("UPDATE events SET status = 'ended' WHERE id = ?").run(event.id);
+    await this.cleanupEndedApplications(guild, event.id);
     const updated = this.getById(event.id);
 
     if (updated) {
@@ -766,6 +786,7 @@ export class EventService {
   }
 
   private participantMinecraftName(row: ParticipantNameRow) {
+    if (row.minecraft_username) return row.minecraft_username;
     if (row.java_username) return row.java_username;
     if (row.bedrock_username) return this.normalizeBedrockDisplay(row.bedrock_username);
     if (row.minecraft_username?.startsWith(".")) return this.normalizeBedrockDisplay(row.minecraft_username);
@@ -930,7 +951,7 @@ export class EventService {
       maxPlayers: row.max_players,
       pingRole: row.ping_role,
       goingRole: row.going_role,
-      verifyRequired: Boolean(row.verify_required),
+      verifyRequired: false,
       googleFormsEnabled: Boolean(row.google_forms_enabled),
       googleFormUrl: row.google_form_url,
       status: row.status,

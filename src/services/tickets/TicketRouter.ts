@@ -9,6 +9,7 @@ import {
 } from "discord.js";
 import { logger } from "../../utils/logger.js";
 import { safeReply } from "./interactionResponses.js";
+import {openTicketBridge} from "./OpenTicketBridge.js";
 import { ticketService } from "./TicketService.js";
 import type { TicketType } from "./TicketRenderer.js";
 
@@ -85,11 +86,7 @@ export class TicketRouter {
           return true;
         }
 
-        await ticketService.open(
-          interaction,
-          ticketType,
-          interaction.fields.getTextInputValue("ticketIssue")
-        );
+        await openTicketBridge.open(interaction,selectedType,interaction.fields.getTextInputValue("ticketIssue"));
         return true;
       }
 

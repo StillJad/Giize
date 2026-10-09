@@ -28,7 +28,7 @@ import {
 } from "./EventApplicationRenderer.js";
 import type { EventRecord } from "./EventRenderer.js";
 
-const developerRoleId = "1518110330377736323";
+
 
 type ApplicationRow = {
   id: number;
@@ -53,6 +53,7 @@ type VerifiedRow = {
 };
 
 export class EventApplicationService {
+  private readonly reviewing = new Set<number>();
   async openModal(interaction: ButtonInteraction, eventId: number) {
     if (!interaction.inGuild()) {
       await safeReply(interaction, { content: "Events can only be used in a server.", flags: 64 });
@@ -73,13 +74,6 @@ export class EventApplicationService {
 
     const verified = this.getVerifiedAccount(interaction.guildId!, interaction.user.id);
 
-    if (event.verifyRequired && !verified) {
-      await safeReply(interaction, {
-        content: "You must verify your Minecraft account before applying for this event. Use `/verify`.",
-        flags: 64,
-      });
-      return;
-    }
 
     if (this.hasExistingApplication(event.id, interaction.user.id)) {
       await safeReply(interaction, { content: "You have already applied for this event.", flags: 64 });
@@ -96,7 +90,7 @@ export class EventApplicationService {
               .setCustomId("answer_one")
               .setLabel("Why should you play the event?")
               .setStyle(TextInputStyle.Paragraph)
-              .setRequired(true)
+              .setRequired(false)
               .setMaxLength(1000)
           ),
           new ActionRowBuilder<TextInputBuilder>().addComponents(
@@ -104,7 +98,7 @@ export class EventApplicationService {
               .setCustomId("answer_two")
               .setLabel("What will you do in the event?")
               .setStyle(TextInputStyle.Paragraph)
-              .setRequired(true)
+              .setRequired(false)
               .setMaxLength(1000)
           )
         )
@@ -129,13 +123,6 @@ export class EventApplicationService {
       return;
     }
 
-    if (event.verifyRequired && !this.getVerifiedAccount(interaction.guildId!, interaction.user.id)) {
-      await safeReply(interaction, {
-        content: "You must verify your Minecraft account before applying for this event. Use `/verify`.",
-        flags: 64,
-      });
-      return;
-    }
 
     await safeReply(interaction, {
       content: "Continue to the event application form:",
@@ -176,17 +163,8 @@ export class EventApplicationService {
     const answerOne = interaction.fields.getTextInputValue("answer_one").trim();
     const answerTwo = interaction.fields.getTextInputValue("answer_two").trim();
 
-    if (!answerOne || !answerTwo) {
-      await safeEdit(interaction, { content: "Please answer both questions before submitting." });
-      return;
-    }
-
     const verified = this.getVerifiedAccount(interaction.guildId, interaction.user.id);
 
-    if (event.verifyRequired && !verified) {
-      await safeEdit(interaction, { content: "You must verify your Minecraft account before applying for this event. Use `/verify`." });
-      return;
-    }
 
     const member = interaction.member instanceof GuildMember
       ? interaction.member
@@ -223,7 +201,20 @@ export class EventApplicationService {
     });
   }
 
-  async review(interaction: ButtonInteraction, applicationId: number, status: "accepted" | "rejected") {
+  async review(interaction: ButtonInteraction, applicationId: number, status: EventApplicationStatus) {
+    if (this.reviewing.has(applicationId)) {
+      await safeReply(interaction, { content: "This application is being updated. Try again in a moment.", flags: 64 });
+      return;
+    }
+    this.reviewing.add(applicationId);
+    try {
+      await this.reviewUnlocked(interaction, applicationId, status);
+    } finally {
+      this.reviewing.delete(applicationId);
+    }
+  }
+
+  private async reviewUnlocked(interaction: ButtonInteraction, applicationId: number, status: EventApplicationStatus) {
     await interaction.deferReply({ flags: 64 });
 
     if (!interaction.inGuild() || !interaction.guild || !this.canReview(interaction.member)) {
@@ -238,16 +229,17 @@ export class EventApplicationService {
     }
 
     const event = eventService.getEventById(application.eventId);
-    if (!event || event.guildId !== interaction.guildId) {
+    if (!event || event.guildId !== interaction.guildId || event.status === "ended") {
       await safeEdit(interaction, { content: "Event not found." });
       return;
     }
 
-    if (application.status !== "pending") {
-      await safeEdit(interaction, { content: "This application has already been reviewed." });
+    if (application.status === status) {
+      await safeEdit(interaction, { content: "This application already has that status." });
       return;
     }
 
+    const previousStatus = application.status;
     const reviewedAt = Date.now();
     sqlite.prepare(`
       UPDATE event_applications
@@ -263,18 +255,20 @@ export class EventApplicationService {
 
     if (status === "accepted") {
       await eventService.acceptApplicant(interaction.guild, interaction.client, event, application.discordId);
+    } else {
+      await eventService.removeApplicant(interaction.guild, interaction.client, event, application.discordId);
     }
 
     await interaction.message.edit({
       embeds: [eventApplicationRenderer.renderTicketEmbed(event, updated)],
-      components: eventApplicationRenderer.renderReviewComponents(application.id, true),
+      components: eventApplicationRenderer.renderReviewComponents(application.id, false),
     }).catch(error => logger.warn("Failed to update application ticket message.", error));
 
     if (interaction.channel?.isTextBased() && "send" in interaction.channel) {
       await interaction.channel.send({
         content: status === "accepted"
           ? `<@${application.discordId}> your application has been accepted.`
-          : `<@${application.discordId}> your application has been rejected.`,
+          : `<@${application.discordId}> your application is now ${status === "pending" ? "pending review" : "denied"}.`,
         allowedMentions: { users: [application.discordId] },
       }).catch(() => {});
     }
@@ -283,12 +277,52 @@ export class EventApplicationService {
       interaction.guild,
       event,
       updated,
-      status === "accepted" ? "Manually accepted" : "Rejected",
+      `Decision changed: ${previousStatus} → ${status}`,
       interaction.user.id,
       false
     );
 
-    await safeEdit(interaction, { content: status === "accepted" ? "Application accepted." : "Application rejected." });
+    await safeEdit(interaction, { content: `Application status: ${status}.` });
+  }
+
+  async editUsername(interaction: ButtonInteraction, applicationId: number) {
+    const application = this.getApplication(applicationId);
+    const event = application && eventService.getEventById(application.eventId);
+    if (!interaction.inGuild() || !this.canReview(interaction.member) || !application || !event || event.guildId !== interaction.guildId || event.status === "ended") {
+      await safeReply(interaction, { content: "Only administrators can edit an active event application.", flags: 64 });
+      return;
+    }
+    await interaction.showModal(new ModalBuilder()
+      .setCustomId(`event_app_username:${applicationId}:${interaction.message.id}`)
+      .setTitle("Edit Minecraft Username")
+      .addComponents(new ActionRowBuilder<TextInputBuilder>().addComponents(new TextInputBuilder()
+        .setCustomId("username").setLabel("Minecraft username (for this event)")
+        .setStyle(TextInputStyle.Short).setRequired(true).setMaxLength(32).setValue(application.minecraftUsername.slice(0, 32)))));
+  }
+
+  async saveUsername(interaction: ModalSubmitInteraction) {
+    await interaction.deferReply({ flags: 64 });
+    const [, id, messageId] = interaction.customId.split(":");
+    const application = this.getApplication(Number(id));
+    const event = application && eventService.getEventById(application.eventId);
+    if (!interaction.guild || !this.canReview(interaction.member) || !application || !event || event.guildId !== interaction.guildId || event.status === "ended") {
+      await safeEdit(interaction, { content: "Only administrators can edit an active event application." });
+      return;
+    }
+    const username = interaction.fields.getTextInputValue("username").trim();
+    if (!username || !/^[.a-zA-Z0-9_ -]{1,32}$/.test(username)) {
+      await safeEdit(interaction, { content: "Enter a valid Minecraft username or Bedrock gamertag (up to 32 characters)." });
+      return;
+    }
+    sqlite.prepare("UPDATE event_applications SET minecraft_username = ? WHERE id = ?").run(username, application.id);
+    const updated = this.getApplication(application.id)!;
+    if (interaction.channel?.isTextBased() && "messages" in interaction.channel) {
+      const message = await interaction.channel.messages.fetch(messageId).catch(() => null);
+      await message?.edit({ embeds: [eventApplicationRenderer.renderTicketEmbed(event, updated)], components: eventApplicationRenderer.renderReviewComponents(application.id, false) });
+    }
+    if (updated.status === "accepted") await eventService.acceptApplicant(interaction.guild, interaction.client, event, updated.discordId);
+    await this.logApplication(interaction.guild, event, updated, `Username changed: ${application.minecraftUsername} → ${username}`, interaction.user.id, false);
+    await safeEdit(interaction, { content: `Event username updated to ${username}.` });
   }
 
   private createApplication(input: {
@@ -338,13 +372,14 @@ export class EventApplicationService {
       type: ChannelType.GuildText,
       parent: category?.type === ChannelType.GuildCategory ? category.id : undefined,
       permissionOverwrites: [
+        ...(config.staffRoleId && config.staffRoleId!==config.ticketStaffRoleId?[{id:config.staffRoleId,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.AttachFiles,PermissionFlagsBits.EmbedLinks]}]:[]),
         { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
         {
           id: application.discordId,
           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory],
         },
         {
-          id: config.staffRoleId,
+          id: config.ticketStaffRoleId,
           allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks],
         },
         {
@@ -355,16 +390,23 @@ export class EventApplicationService {
       reason: `Event application ${application.id}`,
     });
 
-    await channel.send({
-      embeds: [eventApplicationRenderer.renderTicketEmbed(event, application, autoAccepted ? "automatic" : "manual")],
-      components: autoAccepted ? [] : eventApplicationRenderer.renderReviewComponents(application.id, false),
-    });
-
     sqlite.prepare("UPDATE event_applications SET application_channel_id = ? WHERE id = ?")
       .run(channel.id, application.id);
+
+    await channel.send({
+      content: `<@&${config.ticketStaffRoleId}>`,
+      allowedMentions: {roles:[config.ticketStaffRoleId],parse:[]},
+      embeds: [eventApplicationRenderer.renderTicketEmbed(event, application, autoAccepted ? "automatic" : "manual")],
+      components: eventApplicationRenderer.renderReviewComponents(application.id, false),
+    });
+
+
   }
 
   private async logApplication(guild: Guild, event: EventRecord, application: EventApplicationRecord, action: string, reviewerId: string | null, automatic: boolean) {
+    sqlite.prepare(`INSERT INTO event_application_audit (application_id, event_id, guild_id, actor_id, action, status, minecraft_username, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+      .run(application.id, event.id, guild.id, reviewerId, action, application.status, application.minecraftUsername, Date.now());
     const channel = await guild.channels.fetch(config.eventLogsChannelId).catch(() => null);
     if (!channel?.isTextBased() || !("send" in channel)) return;
 
@@ -436,11 +478,7 @@ export class EventApplicationService {
   }
 
   private canReview(member: unknown) {
-    return member instanceof GuildMember && (
-      member.permissions.has(PermissionFlagsBits.Administrator) ||
-      member.roles.cache.has(developerRoleId) ||
-      member.roles.cache.has(config.staffRoleId)
-    );
+    return member instanceof GuildMember && member.permissions.has(PermissionFlagsBits.Administrator);
   }
 
   private nextApplicationChannelName(guild: Guild, username: string) {

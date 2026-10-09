@@ -6,7 +6,7 @@ import {
 } from "discord.js";
 
 import type { Command } from "../../types/Command.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import { VerificationService } from "../../services/verification/VerificationService.js";
 import { minecraftProfileService } from "../../services/verification/MinecraftProfileService.js";
 import { logger } from "../../utils/logger.js";
@@ -33,14 +33,13 @@ export const command: Command = {
     ),
 
   async execute(interaction) {
+    await beginVerification(interaction,interaction.options.getString("minecraft_username",true),interaction.options.getString("platform",true) as "java" | "bedrock");
+  }
+};
+
+export async function beginVerification(interaction: import("discord.js").ChatInputCommandInteraction | import("discord.js").ModalSubmitInteraction, username: string, platform: "java" | "bedrock") {
     await interaction.deferReply({ flags: 64 });
 
-    const username = interaction.options.getString("minecraft_username", true);
-
-    const platform = interaction.options.getString(
-      "platform",
-      true
-    ) as "java" | "bedrock";
     const platformLabel = platform === "java" ? "Java" : "Bedrock";
 
     let normalized = username.trim();
@@ -87,7 +86,7 @@ export const command: Command = {
 
     logger.info(`Verification validation: platform=${platform} submitted="${username}" normalized="${normalized}" javaLookupRun=${javaLookupRun} validationFailureReason=${validationFailureReason}`);
 
-    const embed = giizeEmbed()
+    const embed = glurpsEmbed()
       .setTitle("Verify Minecraft Account")
       .setDescription("Please confirm that this is your Minecraft account before continuing.")
       .addFields(
@@ -95,7 +94,7 @@ export const command: Command = {
         { name: "Platform", value: platformLabel, inline: true },
         { name: "Nickname After Verification", value: nicknameAfterVerification, inline: false }
       )
-      .setFooter({ text: "Glurps Events Verification System" });
+      .setFooter({ text: "Event Bot Verification System" });
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
       new ButtonBuilder()
@@ -115,5 +114,4 @@ export const command: Command = {
       embeds: [embed],
       components: [row],
     });
-  }
-};
+}

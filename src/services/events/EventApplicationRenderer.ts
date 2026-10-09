@@ -3,7 +3,7 @@ import {
   ButtonBuilder,
   ButtonStyle,
 } from "discord.js";
-import { giizeEmbed } from "../../utils/embeds.js";
+import { glurpsEmbed } from "../../utils/embeds.js";
 import type { EventRecord } from "./EventRenderer.js";
 
 export type EventApplicationStatus = "pending" | "accepted" | "rejected";
@@ -29,20 +29,19 @@ export type EventApplicationRecord = {
 export class EventApplicationRenderer {
   renderTicketEmbed(event: EventRecord, application: EventApplicationRecord, mode: "automatic" | "manual" = "manual") {
     const minecraftAccount = application.platform === "Unverified"
-      ? "Not verified"
+      ? `${application.minecraftUsername}`
       : application.minecraftUsername;
-    const embed = giizeEmbed()
+    const embed = glurpsEmbed()
       .setTitle("Event Application")
       .addFields(
         { name: "Event ID", value: `${event.eventNumber}`, inline: true },
         { name: "Event Name", value: event.title, inline: true },
         { name: "Applicant", value: `<@${application.discordId}>`, inline: true },
         { name: "Minecraft Account", value: minecraftAccount, inline: true },
-        { name: "Platform", value: application.platform, inline: true },
         { name: "Priority", value: application.priority, inline: true },
         { name: "Status", value: this.statusLabel(application.status, mode), inline: false },
-        { name: "Why should you play the event?", value: this.truncate(application.answerOne), inline: false },
-        { name: "What will you do in the event?", value: this.truncate(application.answerTwo), inline: false }
+        { name: "Why should you play the event?", value: this.truncate(application.answerOne || "Not provided"), inline: false },
+        { name: "What will you do in the event?", value: this.truncate(application.answerTwo || "Not provided"), inline: false }
       );
 
     if (mode === "automatic") {
@@ -64,18 +63,20 @@ export class EventApplicationRenderer {
         new ButtonBuilder()
           .setCustomId(`event_app_reject:${applicationId}`)
           .setEmoji("❌")
-          .setLabel("Reject")
+          .setLabel("Deny")
           .setStyle(ButtonStyle.Danger)
-          .setDisabled(disabled)
+          .setDisabled(disabled),
+        new ButtonBuilder().setCustomId(`event_app_reset:${applicationId}`).setLabel("Set Pending").setStyle(ButtonStyle.Secondary).setDisabled(disabled),
+        new ButtonBuilder().setCustomId(`event_app_edit:${applicationId}`).setLabel("Edit Username").setStyle(ButtonStyle.Secondary).setDisabled(disabled)
       ),
     ];
   }
 
   renderLogEmbed(event: EventRecord, application: EventApplicationRecord, action: string, reviewerId: string | null, automatic: boolean) {
     const minecraftAccount = application.platform === "Unverified"
-      ? "Not verified"
+      ? `${application.minecraftUsername}`
       : application.minecraftUsername;
-    return giizeEmbed()
+    return glurpsEmbed()
       .setTitle("Event Application")
       .addFields(
         { name: "Action", value: action, inline: true },
@@ -83,7 +84,6 @@ export class EventApplicationRenderer {
         { name: "Event Name", value: event.title, inline: true },
         { name: "Applicant", value: `<@${application.discordId}>`, inline: true },
         { name: "Minecraft Account", value: minecraftAccount, inline: true },
-        { name: "Platform", value: application.platform, inline: true },
         { name: "Priority", value: application.priority, inline: true },
         { name: "Status", value: this.statusLabel(application.status, automatic ? "automatic" : "manual"), inline: true },
         { name: "Reviewed By", value: reviewerId ? `<@${reviewerId}>` : "Not reviewed", inline: true },

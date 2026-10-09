@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Events } from "discord.js";
 import { client } from "./client.js";
 import { config } from "./config/config.js";
-import "./database/database.js";
+import { sqlite } from "./database/database.js";
 import "./handlers/AuditLogHandler.js";
 import "./handlers/AutoModHandler.js";
 import { loadCommands } from "./handlers/CommandHandler.js";
@@ -10,11 +10,36 @@ import "./handlers/ButtonHandler.js";
 import "./handlers/ModalHandler.js";
 import "./handlers/SelectMenuHandler.js";
 import "./handlers/WelcomeHandler.js";
-import { DashboardApiServer } from "./dashboard-api/DashboardApiServer.js";
+import {openTicketBridge} from "./services/tickets/OpenTicketBridge.js";
+import {levelRewardService} from "./services/community/LevelRewardService.js";
+import { levelService } from "./services/community/LevelService.js";
+import { autoModService } from "./services/automod/AutoModService.js";
 import { reminderService } from "./services/events/ReminderService.js";
 import { logger } from "./utils/logger.js";
 
+const required = ["DISCORD_TOKEN", "CLIENT_ID", "GUILD_ID"] as const;
+const missing = required.filter(key => !process.env[key]?.trim());
+if (missing.length) throw new Error(`Missing configuration: ${missing.join(", ")}. Fill in .env before starting.`);
+
 const commands = await loadCommands();
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  logger.info("Stopping Event Bot.");
+  const timeout = setTimeout(() => process.exit(1), 10_000);
+  timeout.unref();
+  reminderService.stop();
+  levelService.stop();
+  try {
+    client.destroy();
+    sqlite.close();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+process.once("SIGINT", () => void shutdown());
+process.once("SIGTERM", () => void shutdown());
 
 logger.info("✓ Connected to database");
 logger.info("✓ Loaded configuration");
@@ -24,11 +49,15 @@ logger.info("✓ Loaded buttons");
 logger.info("✓ Loaded modals");
 logger.info("✓ Loaded AutoMod");
 
-client.once(Events.ClientReady, ready => {
-  logger.info(`✓ Logged in as ${ready.user.tag}`);
+const onReady = (ready: typeof client) => {
+  logger.info(`✓ Logged in as ${ready.user?.tag ?? "Event Bot"}`);
+  autoModService.initializeForGuild(config.guildId);
+  void ready.guilds.fetch(config.guildId).then(async guild => {await levelService.prepareReward(guild);await levelRewardService.prepare(guild);await openTicketBridge.prepareAccess(guild);const members=sqlite.prepare('SELECT user_id,xp FROM member_xp WHERE guild_id=? AND xp>=12750').all(guild.id) as {user_id:string;xp:number}[];for(const member of members){try{await levelService.syncReward(guild,member.user_id);}catch(error){logger.warn('Existing level reward sync failed.',error);}}}).catch(error => logger.warn("Level reward setup needs attention.", error));
   reminderService.start(client);
-  new DashboardApiServer(client).start();
-});
+  levelService.start(client);
+};
+if (client.isReady()) onReady(client);
+else client.once(Events.ClientReady, onReady);
 
 client.on("error", error => {
   logger.error("Discord client error.", error, { type: "client", name: "error" });
@@ -63,4 +92,9 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
-await client.login(config.token);
+try {
+  if (!client.isReady()) await client.login(config.token);
+} catch (error) {
+  await shutdown();
+  throw error;
+}

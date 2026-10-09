@@ -1,6 +1,7 @@
 import { Client, GatewayIntentBits, Partials } from "discord.js";
 
-export const client = new Client({
+const shared = (globalThis as typeof globalThis & { __glurpsClient?: Client }).__glurpsClient;
+export const client = shared ?? new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
