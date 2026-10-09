@@ -5,13 +5,13 @@ import { glurpsEmbed } from "../../utils/embeds.js";
 type PlaceholderTarget = GuildMember | User;
 
 export const welcomeTitle = "Welcome, {username}! 👋";
-export const welcomeDescription = `Welcome to Event Bot!
+export const welcomeDescription = `Welcome to **Glurps**! Glad to have you here.
 
-Please make sure to read {rules} and keep an eye on {announcements} for event updates.
+Take a moment to read {rules}, then keep an eye on {announcements} for upcoming events.
 
 You're member #{membercount}.
 
-Enjoy your stay!`;
+Make yourself at home — see you at the next event!`;
 
 export class WelcomeRenderer {
   render(target: PlaceholderTarget) {
