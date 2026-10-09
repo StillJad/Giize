@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import type { Command } from "../types/Command.js";
 
-export const publicCommands=new Set(['level','leaderboard','help','ping','server','status','participants']);
+export const publicCommands=new Set(['verify','level','leaderboard','help','ping','server','status','participants']);
 
 export async function loadCommands() {
   const commands = new Collection<string, Command>();

@@ -34,8 +34,10 @@ opendiscord.events.get('afterSlashCommandsRegistered').listen(async manager=>{
   const allowed=new Set(manager.getAll().map(command=>command.name));
   const registered=await opendiscord.client.client.application!.commands.fetch();
   for(const command of registered.values()) if(command.type===ApplicationCommandType.ChatInput && !allowed.has(command.name)) await command.delete();
-  const colorPicker=registered.find(command=>command.name==='colorpicker');
-  if(colorPicker && process.env.GUILD_ID) await opendiscord.client.client.application!.commands.create({name:colorPicker.name,description:colorPicker.description,options:colorPicker.options as any,defaultMemberPermissions:PermissionFlagsBits.Administrator},process.env.GUILD_ID);
+  if(process.env.GUILD_ID) for(const name of ['colorpicker','verify','forceverify','unverify','verification']) {
+    const command=registered.find(command=>command.name===name);
+    if(command) await opendiscord.client.client.application!.commands.create({name:command.name,description:command.description,options:command.options as any,defaultMemberPermissions:name==='verify'?null:PermissionFlagsBits.Administrator,contexts:[InteractionContextType.Guild]},process.env.GUILD_ID);
+  }
 });
 
 import {ticketRecord,recordClosure} from './ticket-summary.js';
